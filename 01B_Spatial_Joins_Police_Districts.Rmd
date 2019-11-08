@@ -1,0 +1,463 @@
+---
+title: Chicago PD Districts and Census Spatial Join
+output:
+  html_document: 
+    fig_height: 6
+    fig_width: 6
+    highlight: monochrome
+    theme: cerulean
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+<br>
+
+This notebook joins Chicago Police Department district and beat shapes with census tract shapes and statistics using the following sources:
+
+**Police district boundaries** 
+
+The online data only includes current district.
+
+- Current as of Dec. 19, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-current-/fthy-xz3r)
+- Depreciated December 18, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-deprecated-on-12-18-20/p3h8-xsd4). ([pdf map](https://news.wttw.com/sites/default/files/Map%20of%20Chicago%20Police%20Districts%20and%20Beats.pdf))
+
+**Police beats**
+
+- Current as of Dec. 19, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Beats-current-/aerh-rz74).
+- Depreciated December 18, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Beats-deprecated-on-12-18-2012-/kd6k-pxkv).
+     + Output coordinated system is EPSG:4326 WGS 84, according to [epsg.io](https://epsg.io/transform#s_srs=102671&t_srs=4326).
+     + Earlier in 2012, the 19th district merged into the 23rd district, and the 21st district was split between the 1st, 2nd, and a small portion into the 9th. The closures were part of a cost-cutting plan to reduce a $636 million budget gap, the [Chicago Tribune](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html) reported.
+    
+
+**Census Tracts**
+
+- Significant changes in census tracts. Note: Tracts changed in 2010, 2005-2009 ACS uses 2000 tracts, Via [Rob Paral](http://robparal.blogspot.com/2011/05/chicago-tract-changes.html).
+- 2010 Census Tracts, from city's [online data portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2010/5jrd-6zik).
+- 2000 Census Tracts, from city's [online data portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2000/pt6c-hxpp).
+
+**Census Bureau Stats**
+
+- 2000 Census: Total population, race/ethnicity, poverty
+- 2010 Census: Total population, race/ethnicity
+- ACS 2010: Poverty, population earning $100K+
+- ACS 2015: Poverty
+
+**Notes on area and district changes:**
+
+The Chicago PD made the following changes to the police district jurisdictions in 2012:
+
+- 13th closed and merged with the 12th. 
+- 23rd closed and merged with the 19th.
+- 21st closed and merged with the 1st and 2nd district, with a small piece going to the 9th.
+
+**Reference**
+
+- Chicago Cop's [webpage](https://www.chicagocop.com/archives/documents-archive/cartographs/) has current and historic pdfs of Chicago Police jurisdictions. 
+- Chicago Police [Oct 2011 presentation](http://ward32.org/wp-content/uploads/2011/10/Mayor-CPD-Briefing-Consolidation-101211.pdf)  on consolidation plan.
+- Chicago PD [landing page](https://home.chicagopolice.org/community/districts/) for police districts.
+- City of Chicago [webpage](https://www.chicago.gov/city/en/depts/doit/supp_info/citywide_maps.html) on ward, community area and neighborhood maps.
+- Census tract profiles on [censusreporter.org](https://censusreporter.org/profiles/14000US17031980000-census-tract-9800-cook-il/).
+
+<br>
+
+```{r setup packages}
+
+rm(list=ls())
+gc()
+
+# Load default packages, report functions, disable scientific notation
+source("./Functions/default.R")
+
+# Math on st_intersection
+st_intersection_f <- function(table1, table2) {
+  st_intersection(table1, table2) %>%
+    mutate(`fragment area` = st_area(geometry)) %>%
+    # mutate(`fragment area` = round((as.numeric(`fragment area`)), 0)) %>%
+    # filter(`fragment area` >= 100) %>%
+    mutate(
+      # area = round((as.numeric(area)), 0),
+           # area.1 = round((as.numeric(area.1)), 0),
+           `fragment percent` = `fragment area`/area) %>%
+    replace(., is.na(.), 0) %>%
+    st_set_geometry(NULL)
+}
+
+```
+
+<br>
+
+## Police District Shapes
+
+```{r load dist}
+
+dist_current <- st_read("Input/CPD_district_shapes_current/geo_export_5a4ab56b-3798-4ed1-bd28-7774c5237614.shp") %>% 
+  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
+  st_transform(crs = 4326) %>%
+  mutate(dist_num = str_pad(dist_num, 3, pad = "0")) %>%
+  mutate(area = st_area(geometry))
+plot(dist_current)
+
+dist_dep <- st_read("Input/CPD_district_shapes_deprecated_12_18_2012/geo_export_9b4cf2eb-ef20-4092-bc39-3b64d18aed69.shp") %>% 
+  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
+  st_transform(crs = 4326) %>%
+  mutate(dist_num = str_pad(dist_num, 3, pad = "0")) %>%
+  mutate(area = st_area(geometry))
+
+```
+
+<br>
+
+## Police Beat Shapes
+
+```{r load beats}
+
+beats_current <- st_read("Input/Police_Beats_Current/geo_export_5d875d6d-1fd7-4754-8847-fcf5d0f5bc77.shp") %>% 
+  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
+  st_transform(crs = 4326) %>%
+  select(beat_curr = beat_num, 
+         district_curr = district,
+         geometry) %>%
+  mutate(beat_curr = as.character(beat_curr),
+         area = st_area(geometry))
+
+```
+
+<br>
+
+## 2000 Census Shapes and Stats
+
+```{r tracts_2000}
+
+tracts_2000 <- st_read("Input/Census_tracts_2000/geo_export_337cc9e4-2258-4a67-bd91-dd915899a317.shp") %>% 
+  st_transform(crs = 4326) %>%
+  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
+  mutate(census_t_1 = as.character(census_t_1),
+         tract_yr = "2000") %>%
+  select(tract = census_t_1,
+         geometry,
+         tract_yr)
+
+census_2000_names <- names(read_csv("Input/Census_Stats/DEC_00_SF3_P007/DEC_00_SF3_P007_with_ann.csv", n_max = 0))
+
+census_2000 <- read_csv("Input/Census_Stats/DEC_00_SF3_P007/DEC_00_SF3_P007_with_ann.csv", 
+                        col_names = census_2000_names, skip = 2) %>%
+       mutate(tract_blk_hisp = VD04 + VD10,
+              tract_asian_pi = VD06 + VD07,
+              tract_other = VD01 - (tract_blk_hisp + VD03 + tract_asian_pi),
+              tract = as.character(GEO.id2) %>% str_replace("1714000", "17")) %>%
+       select(tract,
+              tract_total = VD01,
+              tract_blk_hisp,
+              tract_asian_pi,
+              tract_other,
+              tract_white = VD03,
+              tract_blk = VD04,
+              tract_hisp = VD10)
+
+tracts_2000 <- tracts_2000 %>% 
+  left_join(census_2000, by = "tract") %>% 
+
+  # total poverty from 2000 census
+  left_join(
+    (read_csv("Input/Census_Stats/DEC_00_SF3_P087/DEC_00_SF3_P087_with_ann.csv") %>%
+       clean_names() %>%
+       select(tract = id2,
+              tract_total_poverty = income_in_1999_below_poverty_level) %>%
+       mutate(tract = as.character(tract)))
+    , by = "tract") %>%
+  
+  mutate(area = st_area(geometry))
+
+```
+
+```{r report t00}
+make_report(as.data.table(tracts_2000))
+```
+
+<br>
+
+## 2010 Census Shapes and Stats
+
+```{r load tracts}
+
+tract_data_2010 <- st_read("Input/Census_tracts_2010/geo_export_603ae8ba-0139-4272-b6de-278a1230c4d3.shp") %>% st_transform(crs = 4326) %>%
+  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
+  mutate(geoid10 = as.character(geoid10),
+         tract_yr = "2010") %>%
+  select(tract = geoid10,
+         tract_yr,
+         geometry)
+  
+census_2010_names <- names(read_csv("Input/Census_Stats/DEC_10_SF1_P5/DEC_10_SF1_P5_with_ann.csv", n_max = 0))
+
+census_2010 <- read_csv("Input/Census_Stats/DEC_10_SF1_P5/DEC_10_SF1_P5_with_ann.csv", 
+                        col_names = census_2010_names, skip = 2) %>%   
+       
+       # population, race/ethnicity from 2010 census
+       mutate(tract_blk_hisp = as.numeric(D010 + D004),
+              tract_asian_pi = as.numeric(D006 + D007),
+              tract_other = (as.numeric(D001)) - (tract_blk_hisp + (as.numeric(D003)) + tract_asian_pi),
+              tract = as.character(GEO.id2),
+              tract_total = as.numeric(D001),
+              tract_white = as.numeric(D003),
+              tract_blk = as.numeric(D004),
+              tract_hisp = as.numeric(D010),
+              tract = as.character(GEO.id2) %>% str_replace("1714000", "17")) %>%
+       select(tract,
+              tract_total,
+              tract_blk_hisp,
+              tract_asian_pi,
+              tract_other,
+              tract_white,
+              tract_blk,
+              tract_hisp)
+
+tracts_2010 <- tract_data_2010 %>% 
+  left_join(census_2010, by = "tract") %>% 
+  # total poverty 2010 ACS
+  left_join(
+    (read_csv("Input/Census_Stats/ACS_10_5YR_B17001/ACS_10_5YR_B17001_with_ann.csv") %>%
+       clean_names() %>%
+       select(tract = id2,
+              tract_total_poverty = estimate_income_in_the_past_12_months_below_poverty_level) %>%
+       mutate(tract = as.character(tract))),
+    by = "tract") %>%
+  
+  # share of tract that earns income $100K + from 2010 ACS
+  left_join(
+    (read_csv("Input/Census_Stats/ACS_10_5YR_S1901/ACS_10_5YR_S1901_with_ann.csv") %>%
+       # this is actually a percentage
+       mutate(tract_100Kplus = (as.numeric(HC01_EST_VC09) + 
+                                  as.numeric(HC01_EST_VC10) + 
+                                  as.numeric(HC01_EST_VC11)
+                                )/100,
+              tract = as.character(GEO.id2)) %>%
+       select(tract, tract_100Kplus)),
+    by = "tract") %>%
+  
+  mutate(tract_100Kplus = tract_total * tract_100Kplus) %>%
+  
+  mutate(area = st_area(geometry))
+
+```
+
+```{r tracts 2017}
+
+acs_2017_names <- names(read_csv("Input/Census_Stats/ACS_17_5YR_B03002/ACS_17_5YR_B03002_with_ann.csv", n_max = 0))
+
+acs_2017 <- read_csv("Input/Census_Stats/ACS_17_5YR_B03002/ACS_17_5YR_B03002_with_ann.csv", 
+                        col_names = acs_2017_names, skip = 2) %>%   
+       
+       # population, race/ethnicity from 2010 census
+       mutate(tract_blk_hisp = as.numeric(HD01_VD12 + HD01_VD04),
+              tract_asian_pi = as.numeric(HD01_VD06 + HD01_VD07),
+              tract_other = (as.numeric(HD01_VD01)) - (tract_blk_hisp + (as.numeric(HD01_VD03)) + tract_asian_pi),
+              tract = as.character(GEO.id2),
+              tract_total = as.numeric(HD01_VD01),
+              tract_white = as.numeric(HD01_VD03),
+              tract_blk = as.numeric(HD01_VD04),
+              tract_hisp = as.numeric(HD01_VD12),
+              tract = as.character(GEO.id2) %>% str_replace("1714000", "17")) %>%
+       select(tract,
+              tract_total,
+              tract_blk_hisp,
+              tract_asian_pi,
+              tract_other,
+              tract_white,
+              tract_blk,
+              tract_hisp)
+
+tracts_2017 <- tract_data_2010 %>% 
+  left_join(acs_2017, by = "tract") %>% 
+  mutate(area = st_area(geometry), tract_yr = "2017")
+
+```
+
+<br>
+
+## District and Census Spatial Join
+
+Using [st_intersection](https://r-spatial.github.io/sf/reference/st_join.html): If a geometry or geography shares any portion of space then they intersect. ST_Intersects pulls in all Overlaps, Touches, Within all imply spatial intersection. If any of the aforementioned returns true, then the geometries also spatially intersect. Disjoint implies false for spatial intersection. I'm using this because the population within an RD is fluid.
+
+```{r dist depreciated}
+
+citywide <- bind_rows(
+  st_set_geometry(tracts_2000, NULL), 
+  st_set_geometry(tracts_2010, NULL),
+  st_set_geometry(tracts_2017, NULL)) %>%
+  mutate(dist_label = "Citywide",
+         dist_num = "099",
+         `fragment percent` = 1) %>%
+  select(-c(area)) 
+  
+dist_tracts_current <- bind_rows(
+    (st_intersection_f(tracts_2000, dist_current)),
+    (st_intersection_f(tracts_2010, dist_current)),
+    (st_intersection_f(tracts_2017, dist_current))) %>% 
+  select(-c(area.1, `fragment area`, area)) %>% 
+  group_by(tract_yr, tract) %>%
+  mutate(total_pct = sum(`fragment percent`)) %>%
+  mutate(`fragment percent` = `fragment percent` * 1 / total_pct)
+
+
+dist_tracts_current <- bind_rows(citywide, dist_tracts_current) %>%
+  replace(., is.na(.), 0) %>%
+  # calculate the total in the tract by the percent of the tract within the police district
+  mutate(dist_total = as.numeric(tract_total * `fragment percent`),
+         dist_blk_hisp = as.numeric(tract_blk_hisp * `fragment percent`), 
+         dist_asian_pi = as.numeric(tract_asian_pi * `fragment percent`),
+         dist_other = as.numeric(tract_other * `fragment percent`),
+         dist_white = as.numeric(tract_white * `fragment percent`),
+         dist_blk = as.numeric(tract_blk * `fragment percent`),
+         dist_hisp = as.numeric(tract_hisp * `fragment percent`),
+         dist_100Kplus = as.numeric(tract_100Kplus * `fragment percent`)
+         ) %>%
+  rename(location_police_district_name = dist_label,
+         location_police_district = dist_num,
+         cen_yr = tract_yr) %>%
+  # select(-c(`fragment percent`)) %>%
+  # drop all columns containing tract name instead of dist name
+  select(-contains("tract_"))
+
+# Chicago population according to census:
+# 2000        2010
+# 2,896,000   2,698,000
+
+# Our calculations
+
+dist_tracts_current %>% 
+  filter(location_police_district_name != "Citywide") %>% 
+  group_by(cen_yr) %>% 
+  summarize(total = sum(dist_total))
+
+make_report(as.data.table(dist_tracts_current))
+
+```
+
+<br>
+
+## District Summary
+
+- Sum all tracts within district
+- Create a "Citywide" summary
+- Calculate each year in between census using the average change per year
+- Calculate percentages
+
+```{r districts sum}
+
+leftovers <- dist_tracts_current %>% 
+  filter(is.na(location_police_district_name))
+
+dist_tracts_sum_current <- dist_tracts_current %>%
+       # sum all the census tract values per district
+       group_by(location_police_district_name, 
+                location_police_district, 
+                cen_yr) %>%
+       summarise_if(is.numeric, (funs(sum))) %>% 
+  select(-c(`fragment percent`, total_pct))
+
+dist_tracts_sum_current <- dist_tracts_sum_current %>% 
+  # take out excess rows when 2015 is all NA values
+  filter(dist_total>1) %>%
+  select(location_police_district_name, 
+         location_police_district, 
+         cen_yr, everything()) %>%
+  gather("measure", "value", dist_total:dist_100Kplus) %>%
+  spread(cen_yr, value) %>%
+  
+  # calculate an even amount of change between the censuses to calculate the years in between
+  mutate(change_00_10 = (`2010` - `2000`)/ 10,
+         change_10_17 = (`2017` - `2010`)/ 7) %>%
+  
+  mutate(`2000` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2000`), 
+         `2001` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2000`+ change_00_10), 
+         `2002` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2001`+ change_00_10),
+         `2003` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2002`+ change_00_10),
+         `2004` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2003`+ change_00_10),
+         `2005` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2004`+ change_00_10),
+         `2006` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2005`+ change_00_10),
+         `2007` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2006`+ change_00_10),
+         `2008` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2007`+ change_00_10),
+         `2009` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2008`+ change_00_10),
+         
+         `2011` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2010`+ change_10_17),
+         `2012` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2011`+ change_10_17),
+         `2013` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2012`+ change_10_17),
+         `2014` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2013`+ change_10_17),
+         `2015` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2014`+ change_10_17),
+         `2016` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2015`+ change_10_17),
+         `2018` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2017`+ change_10_17),
+         `2019` = ifelse(measure == "dist_100Kplus", `2010`,
+                         `2018`+ change_10_17)
+  ) %>% 
+         
+
+  select(-c(change_00_10, change_10_17)) %>%
+  gather("year", "value", `2000`:`2019`) %>%
+  spread(measure, value) %>%
+  
+  # calcculate percents
+  mutate(dist_percent_blk_hisp = round((dist_blk_hisp/dist_total), digits = 2),
+         dist_percent_white = round((dist_white/dist_total), digits = 2),
+         dist_percent_blk = round((dist_blk/dist_total), digits = 2),
+         dist_percent_hisp = round((dist_hisp/dist_total), digits = 2),
+         dist_percent_non_white = 1 - dist_percent_white,
+         dist_percent_100Kplus = round((dist_100Kplus/
+                                           dist_total[which(year == "2010")]), digits = 2)) 
+
+# Make an "all years" row using 2010 numbers
+dist_tracts_sum_current <- 
+  bind_rows(
+    dist_tracts_sum_current,
+    (
+      dist_tracts_sum_current %>%
+        filter(year == "2010") %>%
+        mutate(year = "All Years")
+    )
+  )
+
+```
+
+```{r report final}
+
+make_report(as.data.table(dist_tracts_sum_current))
+
+```
+
+<br>
+
+### Write csv
+
+```{r write dist csv}
+
+dist_tracts_sum_current %>% write_csv("Output/police_districts_tracts_sum.csv")
+
+```
+
+<br>

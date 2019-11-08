@@ -1,0 +1,533 @@
+---
+title: Prepare Chicago Crime Data
+output:
+  html_document:
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 9
+    highlight: monochrom
+    theme: cerulean
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: no
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+<br> 
+
+This notebook formats Chicago Police Department crime data for analysis, combining data from multiple sources.
+
+<br>
+
+# Data Sources:
+
+**Online**
+
+- Crime data from the [Chicago Online Data Portal](https://data.cityofchicago.org/Public-Safety/Crimes-2001-to-present/ijzp-q8t2) 
+    + Covers incidents from Jan. 1, 2001 through the date of download, Oct. 28, 2019, which is also date of last update.
+    + Removed incidents after Aug. 31, 2019 in order to align with the dates in our FOIA data.
+    + One row per incident, regardless of the number of victims, except for homicides, which has one row per victim.
+- Sunrise and sunset times for Chicago from [sunrise_sunset.org](https://sunrise-sunset.org/search?location=chicago%2C+il).
+    + I used the sunrise and sunset times for Feb. 28 for Feb. 29. 
+    
+**Freedom of Information Law Request**
+
+- All homicides, Jan. 1, 2001 through Aug. 31, 2019. This data includes a "Closed Yes/No" field, but not detailed case status.
+- Shootings (fatal and nonfatal), Jan. 1, 2010 through Aug. 31, 2019. This data includes detailed case status.
+
+*For homicides, the online arrest status generally matches the "Closed Yes/No" status in the FOIA data. But we found significant discrepancies between these two status fields and the detailed case status in the shooting data. Our comparisons can be found in the analysis file.*
+
+**Manual Categorizations**
+
+- We categorized IUCR crime codes and descriptions into groups that indicate the crime type (such as "Part I Violent", "Part I Property", and "Narcotics - Possession, Purchase"), the weapon type, whether the incident was a shooting, whether the victim was injured, the type of victim, and for drug and alcohol offenses, the type of drug and whether the offense was related to possession and purchase, or sale and manufacturing.
+    + References for IUCR categorizations are in the "Manual Categorizations" folder, and additional notes are in the spreadsheet. I primarily used the Chicago PD's [Incident Reporting Guide](http://directives.chicagopolice.org/forms/CPD-63.451_Table.pdf), which is linked on the landing page for the online data.
+    + The [FBI](https://ucr.fbi.gov/crime-in-the-u.s/2010/crime-in-the-u.s.-2010/property-crime) classifies arson as a Part I property crime "because the offense involves the destruction of property." However, I categorized aggravated arson as a Part I violent crime because the IUCR code specifies injury.
+    + "Non-Criminal" offenses are non-criminal in all categories and are removed from the analysis. Involuntary and reckless manslaughter are categorized non-criminal.
+    + Intimidation, threats, stalking, and harassment are classified as "Threats and Harassment" with no weapon. Otherwise, `crime_group_large_inferred` index crimes are either "Part I Violent" or "Part I Property". Robbery is classified as a crime against person, per UCR, even though it's a classified as a "crime against property" in Chicago PD's ClearMap.
+- Location description categorized into the groups, "Inside", "Outside", "Unclear/Unspecified", and "Vehicle/Transit/Boat", along with another more detailed categorization indicating the type of location, such as "Residential", "Commercial", "School", "Park", etc.
+- Specific victim-offender relationships categorized into "Romantic", "Other Family", "Otherwise Known", "Stranger", "Other", and "Null/Unknown". This is only for homicides.
+
+
+<br>
+
+## Notes and Caveats
+
+**Variations in incident counts:** The online data homicide counts are close to the number of homicides reported to the FBI via Return-A, but the aggravated assault counts fall short. This is likely because the online data contains only one record per incident, regardless of victim count, for all crimes besides homicides. Aggravated Assaults and rapes are reported to the FBI using the victim count. Robberies are reported to the FBI by incident, and the counts are much closer to the counts from the online data.
+
+**Case Status definitions per CPD:** The FOIA Shooting Data includes case status. These are the definitions, according to the Chicago Police Department press office.
+
+- 0-OPEN ASSIGNED - Assigned to a Detective for Investigation	
+- 0-OPEN UNASSIGNED - Reviewed by District, not yet assigned to Detectives	
+- 1-SUSPENDED - Case cannot proceed further at this time pending additional investigative leads	
+- 3-CLEARED CLOSED - All offenders have been arrested and charged	
+- 4-CLEARED OPEN - One or more offenders arrested and charged, one or more offenders still wanted	
+- 5-EX CLEARED CLOSED - All offenders identified, whereabouts known, and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender	
+- 6-EX CLEARED OPEN - One or more offenders identified, whereabouts known and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender	
+- 7-CLOSED NON-CRIMINAL- Incident not criminal in nature	
+
+<br>
+
+```{r default load, echo=TRUE}
+
+rm(list=ls())
+gc()
+
+# Load default packages, report functions, disable scientific notation
+source("./Functions/default.R")
+
+```
+
+<br>
+
+<br>
+
+# Load Data
+
+<br>
+
+## Online crime data
+
+```{r load online data and code tables, echo=TRUE, message=FALSE, warning=FALSE}
+
+online <- read_csv("https://chicago-police-data.s3.amazonaws.com/chicago_crime_20010101-20191028.csv", guess_max = 8000000) %>%
+  clean_names()
+
+```
+
+```{r online report}
+
+head(online)
+make_report(online) 
+
+```
+
+<br>
+
+**Test for 2012 district changes:**
+
+For incidents prior to 2013, we checked to see if online data uses the depreciated district or the present day districts. It looks like the depreciated districts are not in the data at all, implying that the data uses the present-day district where the incident occurred.
+
+- 13th closed, merged into the 12th. 
+- 21st closed and was split between the 1st and 2nd district, with a small piece going to the 9th.
+- 23rd closed on March 4 of 2012, and merged with the 19th.
+- Source: [Oct 2011 presentation](http://ward32.org/wp-content/uploads/2011/10/Mayor-CPD-Briefing-Consolidation-101211.pdf) and [chicagocop.com](https://www.chicagocop.com/archives/documents-archive/cartographs/)
+
+```{r test districts}
+
+count(online, district)
+# Only 4 incidents in 21st district
+
+```
+
+<br>
+
+## FOIA homicide and shooting data
+
+```{r load prr data}
+
+## Homicide data
+hom <- read_csv("Input/FOIA_Homicide_Shootings/PRR_CPD_Homicides_reformat.csv", guess_max = 3000000) %>%
+  clean_names()
+make_report(hom)
+## Shooting data
+shot <- read_csv("Input/FOIA_Homicide_Shootings/PRR_CPD_Shootings_reformat.csv", guess_max = 3000000) %>%
+  clean_names()
+make_report(shot)
+
+```
+<br>
+
+# Clean and Format Data
+
+<br>
+
+## FOIA Data
+
+```{r format foia}
+
+hom <- hom %>%
+  select(id_case_number = rd, 
+         id, 
+         injury_type, 
+         status_cleared = cleared_2, 
+         date_cleared, 
+         circ_death_cause_category = death_cause_category,
+         victim_name, victim_sex, victim_age, victim_race, victim_rel_to_offender) %>%
+  mutate(date_cleared = mdy(date_cleared),
+         id = str_pad(id, 8, pad = "0")) %>%
+  
+  # condense death cause category
+  mutate(circ_death_cause_group = case_when(
+    circ_death_cause_category == "UNDETERMINED" |
+      is.na(circ_death_cause_category) ~ "Null/Undetermined",
+    circ_death_cause_category %in% 
+      c("GANGLAND", "GANGLAND TYPE", "NARCOTICS") ~ "Drugs/Gang",
+    circ_death_cause_category %in%
+      c("ALTERCATION", "ROBBERY") ~ str_to_title(circ_death_cause_category),
+    TRUE ~ "Other")) 
+
+shot <- shot %>%
+  # remove blank rows
+  filter(!is.na(id)) %>%
+  rename(id_case_number = rd) %>%
+  mutate(shooting_ind = "Y") %>%
+  select(id_case_number, status, shooting_ind)
+
+```
+
+<br>
+
+# Format online data
+
+```{r format online data}
+
+crime <- online %>%
+  
+  mutate(date_occurred = mdy_hms(date),
+         id = str_pad(id, 8, pad = "0"),
+         domestic = as.logical(domestic)) %>%
+  
+  # filtering data so data aligns with foia data
+  filter(date_occurred < "2019-09-01") %>%
+  
+  # select fields
+  select(id, 
+         id_case_number = case_number,
+         date_occurred,
+         
+         crime_iucr = iucr,
+         crime_ucr = fbi_code,
+         crime_primary_type = primary_type,
+         crime_description = description,
+         status_arrest = arrest,
+         circ_domestic = domestic,
+         
+         location_address = block,
+         location_description,
+         # not taking community area because we are geolocating the incidents ourselves
+         
+         location_police_district = district,
+         location_beat = beat,
+         
+         location_longitude = longitude, 
+         location_latitude = latitude,
+         year) %>%
+  
+  mutate(crime_iucr = str_pad(crime_iucr, 4, pad = "0"),
+         crime_ucr = str_pad(crime_ucr, 3, pad = "0")) 
+
+```
+
+<br>
+
+### Day/Night Field
+
+Add a field that indicates of the incident happened during daylight or darkness.
+
+```{r join all}
+
+
+daynight <- read_csv("Input/Daylight_Climate/sunrise_sunset_simple.csv") %>%
+  mutate(sunrise = (sunrise_hour*100) + sunrise_minute,
+         sunset = (sunset_hour*100) + sunset_minute)
+
+times <- online %>%
+  select(id, date) %>%
+  mutate(id = str_pad(id, 8, pad = "0"),
+         date_occurred = mdy_hms(date),
+         month = month(date_occurred),
+         day = day(date_occurred),
+         time = ((as.numeric(hour(date_occurred))) *100) + as.numeric(minute(date_occurred))) %>%
+  left_join(daynight, by = c("month", "day")) %>%
+  mutate(day_night = ifelse(
+    time >= sunrise & time <= sunset, "day", "night"))
+
+```
+
+<br>
+
+## Join all datasets
+
+```{r join online and other}
+
+crime <- crime %>%
+
+  left_join(
+    (times %>% select(id, day_night)), by = "id"
+  ) %>%
+
+  # joining with hom by both ids because only homicides have a separate id for the vic and the incident
+  left_join(hom, by = c("id_case_number", "id")) %>%
+  left_join(shot, by = "id_case_number") %>%
+  
+  # add manual categories
+  left_join((read_csv("Input/Manual_Categorizations/manual_iucr_categories.csv") %>%
+               select(-c(crime_primary_type, crime_description, notes, n)) %>%
+               mutate(crime_iucr = str_pad(crime_iucr, 4, pad = "0"),
+                      crime_ucr = str_pad(crime_ucr, 3, pad = "0"),
+                      crime_index = ifelse(crime_index == "I", TRUE, FALSE)) %>%
+               unique()),  by = c("crime_iucr", "crime_ucr")) %>%
+  
+  left_join(
+    (read_csv("Input/Manual_Categorizations/location_manual_categories.csv"))
+    , by = "location_description") %>%
+  
+  
+  left_join(
+    (read_csv("Input/Manual_Categorizations/vic_rel_manual_cat.csv"))
+    , by = "victim_rel_to_offender") 
+
+# check day_night  
+crime %>%
+  group_by(hour(date_occurred)) %>% count(day_night) %>% spread(day_night, n)
+
+```
+
+<br>
+
+## Combined Fields and Other Fixes
+
+- `weapon_inferred` determines the weapon used taking into account multiple field: the shooting indicator, weapon type, injury type.
+- `weapon_firearm_ind_inferred` simplifies the weapon field into firearm y/n.
+- `shooting_ind_inferred` infers whether the incident was a shooting based on the IUCR code, if the incident was in our shooting data, if the incident is a homicide and the weapon was a firearm. 
+- `circ_combined` based on the domestic y/n flag, the circumstance in the homicide data, and the victim/offender relationship.
+- Other larger groupings, such as race/ethicity, age, and offense type to make analysis easier.
+
+```{r crime filter mutate}
+
+crime <- crime %>%
+  # removing non-criminal and non-legitimate police districts
+  filter(!is.na(location_police_district)) %>%
+  filter(!location_police_district %in% c("021", "031") & 
+           crime_group_large_inferred != "Non-Criminal") %>%
+  
+  mutate(location_police_district = str_pad(location_police_district, 3, pad = "0"),
+         status_arrest = as.logical(status_arrest))
+
+```    
+   
+```{r combined cols}    
+
+crime <- crime %>%   
+  
+  # determines weapon considering multiple factors
+  mutate(weapon_inferred = case_when(shooting_ind == "Y" | injury_type == "SHOT" ~ "Firearm",
+                                     injury_type == "STABBED" ~ "Knife/Sharp Object",
+    crime_primary_type == "HOMICIDE" ~ "Other/Physical Force",
+    TRUE ~ weapon_inferred),
+    
+    # simplifies, firearm y/n
+    weapon_firearm_ind_inferred = case_when(
+      weapon_inferred == "Firearm" ~ "Firearm",
+      crime_primary_type == "HOMICIDE" ~ "Other/Physical Force",
+      TRUE ~ weapon_firearm_ind_inferred),
+    
+    # determines if it was a shooting considering multiple fields
+    shooting_ind_inferred = case_when(
+      crime_primary_type == "HOMICIDE" & weapon_inferred == "Firearm" ~ "Fatal Shooting",
+      crime_primary_type == "HOMICIDE" ~ "Other Homicide",
+      shooting_ind == "Y" ~ "Firearm - Nonfatal Shooting",
+      TRUE ~ shooting_ind_inferred))
+  
+crime <- crime %>%
+  
+  # this is a category I ended up wanting a lot, and the order I wanted it in
+  mutate(shot_cat = case_when(weapon_firearm_ind_inferred == "Firearm" ~ shooting_ind_inferred,
+                              crime_primary_type == "HOMICIDE" ~ "Other Homicide",
+                              TRUE ~ "Other"),
+         shot_cat = factor(shot_cat, levels=c("Fatal Shooting", 
+                                              "Other Homicide",
+                                              "Firearm - Nonfatal Shooting",
+                                              "Firearm - Discharge Unspecified",
+                                              "Firearm - Discharge",
+                                              "Firearm - Violation",
+                                              "Other"), 
+                           labels=c("Fatal Shooting", 
+                                    "Other Homicide",
+                                    "Nonfatal Shooting",
+                                    "Firearm - Discharge Unspecified",
+                                    "Firearm Discharge",
+                                    "Firearm Violation",
+                                    "Other")),
+         
+         # determines circumstance using a variety of factors
+         circ_combined = case_when(crime_primary_type != "HOMICIDE" ~ "Null",
+                                   circ_domestic | victim_type_inferred == "Domestic" | 
+                                     victim_rel_cat_inferred %in% c("Other Family", "Romantic") ~ "Family/Romantic",
+                                   
+                                   circ_death_cause_group %in% 
+                                     c("Altercation", "Robbery", "Drugs/Gang") ~ circ_death_cause_group,
+                                   
+                                   circ_death_cause_group == "Null/Undetermined" |
+                                     (victim_rel_cat_inferred == "Null/Unknown" & circ_death_cause_category == "OTHER") |
+                                     is.na(victim_rel_cat_inferred) ~ "Undetermined",
+ 
+                                   !is.na(circ_death_cause_category) ~ "Other",
+                                   
+                                   TRUE ~ "Null"),
+         
+         victim_race_group = case_when(victim_race %in% c("WHITE HISPANIC", "BLACK HISPANIC") ~ "Latino",
+                                       victim_race %in% c("UNKNOWN", "AMER IND/ALASKAN NATIVE", "ASIAN/PACIFIC ISLANDER") |
+                                         is.na(victim_race) ~ "Other/Unknown",
+                                       TRUE ~ str_to_title(victim_race)),
+         
+         victim_race_group = factor(victim_race_group, 
+                                    levels = c("Black", "Latino", "White", "Other/Unknown"),
+                                    labels = c("Black", "Latino", "White", "Other/Unknown")),
+         
+         victim_age_group = case_when(
+           is.na(victim_age) ~ "Null",
+           victim_age <= 2 ~ "Baby/Toddler",
+           victim_age <= 14 ~ "Child 3 - 14",
+           victim_age <= 21 ~ "Teen/Young Adult 15-21",
+           victim_age <= 32 ~ "Adult 22 - 32",
+           victim_age <= 47 ~ "Adult 33 - 47",
+           TRUE ~ "Adult 48+"),
+         
+         victim_age_group = factor(victim_age_group, 
+                                   levels=c("Baby/Toddler", "Child 3 - 14",
+                                            "Teen/Young Adult 15-21",
+                                            "Adult 22 - 32", "Adult 33 - 47",
+                                            "Adult 48+","Null"),
+                                   labels=c("Baby/Toddler", "Child 3 - 14",
+                                            "Teen/Young Adult 15-21",
+                                            "Adult 22 - 32", "Adult 33 - 47",
+                                            "Adult 48+","Null")),
+         year = as.character(year)) %>%
+  
+  mutate_at(vars(crime_primary_type, crime_description, location_description), funs(str_to_title)) %>%
+  
+  select(-c(shooting_ind)) %>%
+  
+  select(sort(current_vars()))
+
+make_report(as.data.table(crime))
+
+```
+
+<br>
+
+**Run report on just homicide and nonfatal shooting records**
+
+```{r report for just homicides}
+
+table <- crime %>% filter(crime_primary_type=="Homicide" | shot_cat=="Nonfatal Shooting")
+make_report(as.data.table(table))
+
+```
+
+<br>
+
+# Add Latitude and Longitude to NAs
+
+66,335 incidents are missing lat/long. We add lat/longs to the NAs by averaging the lat/longs for each block-level address, and if there's still not a match, the average lat/long for the police beat. 
+
+```{r pull lat longs for na lat/long}
+
+spat <- crime %>%
+  select(id, 
+         location_address, 
+         location_beat,
+         location_latitude,
+         location_longitude)
+
+spat <- spat %>%
+  filter(!is.na(location_latitude)) %>%
+  group_by(location_address, location_beat) %>%
+  summarise(avg_lat = mean(location_latitude),
+            avg_long = mean(location_longitude)) %>%
+  right_join(spat, by = c("location_address", "location_beat")) 
+
+spat <- spat %>%
+  filter(!is.na(location_latitude)) %>%
+  group_by(location_beat) %>%
+  summarise(avg_lat_beat = mean(location_latitude),
+            avg_long_beat = mean(location_longitude)) %>%
+  right_join(spat, by = "location_beat") %>%
+  # use the actual value when it exists, otherwise use the average location_address/location_beat value, otherwise use the average location_beat value
+  mutate(latitude_inferred = case_when(!is.na(location_latitude) ~ location_latitude,
+                                       !is.na(avg_lat) ~ avg_lat,
+                                       TRUE ~ avg_lat_beat),
+         longitude_inferred = case_when(!is.na(location_longitude) ~ location_longitude,
+                                       !is.na(avg_long) ~ avg_long,
+                                       TRUE ~ avg_long_beat)) %>%
+  # create a lat/long inferred indicator
+  mutate(location_latlong_inf_ind = is.na(location_latitude)) 
+
+  # check work: lat/long inferred worked - yes
+spat %>% group_by(
+  location_longitude == longitude_inferred, 
+  is.na(longitude_inferred), is.na(location_longitude)
+  ) %>%
+    summarise(n = n())
+
+```
+
+```{r replace}
+
+# replace lat/long with inferred lat/longs
+spatjoin <- crime %>%
+  select(-c(location_latitude, location_longitude)) %>%
+  left_join(
+    (spat %>% select(id,
+                     location_latitude = latitude_inferred, 
+                     location_longitude = longitude_inferred, 
+                     location_latlong_inf_ind))
+    , by = "id") %>%
+  
+  # combining 13th district with 12th district for purpose of analysis, because it was depreciated Dec. 18, 2012
+  mutate(location_police_district_dep = location_police_district,
+         location_police_district = case_when(location_police_district == "13" ~ "013",
+                                              TRUE ~ str_pad(location_police_district, 3, pad = "0")))
+
+#check work
+#count(crime, location_police_district)
+
+```
+
+```{r write report}
+
+profile_missing_f(spatjoin)
+
+head(spatjoin)
+
+```
+
+<br>
+
+# Write final csv
+
+```{r write final csv}
+
+spatjoin %>% write_csv("Output/crime_clean.csv")
+
+```
+
+<br>
+<br>
+
+### Tests
+
+```{r tests}
+
+crime %>% filter(crime_primary_type == "Homicide") %>% count(circ_domestic)
+
+crime %>% filter(crime_primary_type == "Homicide") %>% count(circ_combined)
+
+crime %>% filter(crime_primary_type == "Homicide" & (circ_domestic | 
+                                                       victim_type_inferred == "Domestic" | 
+                                                       victim_rel_cat_inferred %in% c("Other Family", "Romantic"))) %>% summarise(n=n())
+# 900	
+```
+
+
+
