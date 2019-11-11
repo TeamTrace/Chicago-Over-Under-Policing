@@ -159,7 +159,6 @@ crime_org <- read_csv("Output/crime_clean.csv", guess_max = 8000000)
 
 # add time, area, watch fields
 crime <- crime_org %>%
-  filter(!location_police_district == c("021", "031")) %>%
   mutate(location_area = recode(location_police_district,
                                 `011` = "North",
                                 `014` = "North",
@@ -217,7 +216,6 @@ crime <- crime_org %>%
            location_area == "South" &
              time > 1700 & time <= 2200 ~ "3rd Watch",
          TRUE ~ "No Watch")) %>%
-  filter(!location_area %in% c("031", "021")) %>%
   select(sort(current_vars()))
 
 crime %>% group_by(location_area, detective_watch) %>% summarise(n=n()) %>% spread(location_area, n)
@@ -1773,7 +1771,7 @@ qmplot(location_longitude, location_latitude, data =
 
 ```{r antwan melvin}
 
-hom %>%
+shot %>%
   filter( 
     (location_police_district == "005" & year == 2017) |
       (location_police_district == "022" & year == 2015)

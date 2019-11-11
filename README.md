@@ -1,8 +1,8 @@
 # Chicago Over-Policing, Under-Policing Analysis
 
-The Trace used data from the Chicago Police department and other sources to examine trends in gun violence, clearance rates, and proactive policing. This repository includes the data, methodology, documentation, and code for that analysis. The findings were used in the story, [“Most Shooters Go Free in Chicago’s Most Violent Neighborhoods — While Police Make Non-Stop Drug Arrests”](), published on November 12, 2019.
+The Trace used data from the Chicago Police department and other sources to examine trends in gun violence, clearance rates, and proactive policing. This repository includes the data, methodology, documentation, and code for that analysis. The findings were used in the story, [“Most Shooters Go Free in Chicago’s Most Violent Neighborhoods — While Police Make Non-Stop Drug Arrests”](https://www.thetrace.org/2019/11/most-shooters-go-free-in-chicagos-most-violent-neighborhoods-while-police-make-non-stop-drug-arrests/), published on November 12, 2019.
 
-The story was done in partnership with WTTW, for its digital documentary series, "WTTW Firsthand: Gun Violence.” The 15-episode series chronicles what Chicagoans are doing every day to fight for peace in their communities. You can find the series, and The Trace’s other stories for the series, on [WTTW's project page]().
+The story was done in partnership with WTTW, for its digital documentary series, "WTTW Firsthand: Gun Violence.” The 15-episode series chronicles what Chicagoans are doing every day to fight for peace in their communities. You can learn more about the series on the [project page](https://www.thetrace.org/projects/firsthand/).
 
 <br>
 
