@@ -21,10 +21,6 @@ library(ggsci)
 library(DataExplorer)
 library(skimr)
 
-# Colors
-#yl_rd <- RColorBrewer::brewer.pal(8, "YlOrRd") %>% adjust_luminance(+1.0)
-#rd_bl <- RColorBrewer::brewer.pal(8, "RdYlBu") %>% adjust_luminance(+1.0)
-
 ### Functions for formatting tables
 dt_no_filter <- function(table) {
   
@@ -35,8 +31,7 @@ dt_no_filter <- function(table) {
               options = list(pageLength=10, 
                              pagingType="full",
                              autoWidth=FALSE, 
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2)),
+                             scrollX = TRUE),
               class = "compact row-border cell-border stripe") %>%
     formatStyle(columns = c(1:100), fontSize = '80%') 
 }
@@ -50,8 +45,7 @@ dt_filter <- function(table) {
               options = list(pageLength=10, 
                              pagingType="full",
                              autoWidth=FALSE, 
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2)),
+                             scrollX = TRUE),
               filter = list(
                 position = 'top', clear = FALSE, plain = TRUE
               ),
@@ -67,8 +61,7 @@ dt_simple <- function(table) {
               extensions = "FixedColumns",
               options = list(pageLength=10,
                              pagingType="full",
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2),
+                             scrollX = TRUE,
                              dom = 'tps'), 
               class = "compact row-border cell-border stripe") %>%
     formatStyle(columns = c(1:100), fontSize = '80%') 
@@ -83,8 +76,7 @@ dt_simple_long <- function(table) {
               extensions = "FixedColumns",
               options = list(pageLength=30,
                              pagingType="full",
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2),
+                             scrollX = TRUE,
                              dom = 'tps'), 
               class = "compact row-border cell-border stripe") %>%
     formatStyle(columns = c(1:100), fontSize = '80%') 
@@ -99,8 +91,7 @@ dt_bare <- function(table) {
               extensions = "FixedColumns",
               options = list(pageLength=40,
                              pagingType="full",
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2),
+                             scrollX = TRUE,
                              dom = 't'), 
               class = "compact row-border cell-border stripe") %>%
     formatStyle(columns = c(1:100), fontSize = '80%') 
@@ -142,8 +133,7 @@ make_report <- function(table) {
               options = list(pageLength=10, 
                              pagingType="full",
                              autoWidth=FALSE, 
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2)),
+                             scrollX = TRUE),
               filter = list(position = 'top',
                             clear = FALSE,
                             plain = TRUE),
@@ -175,8 +165,7 @@ profile_missing_f <- function(table) {
               options = list(pageLength=15, 
                              pagingType="full",
                              autoWidth=FALSE, 
-                             scrollX = TRUE, 
-                             fixedColumns = list(leftColumns = 2)),
+                             scrollX = TRUE),
               filter = list(position = 'top', clear = FALSE, plain = TRUE),
               class = "compact row-border cell-border stripe") %>%
     formatStyle('% Missing',

@@ -2,15 +2,15 @@
 
 The Trace used data from the Chicago Police department and other sources to examine trends in gun violence, clearance rates, and proactive policing. This repository includes the data, methodology, documentation, and code for that analysis. The findings were used in the story, [“Most Shooters Go Free in Chicago’s Most Violent Neighborhoods — While Police Make Non-Stop Drug Arrests”](), published on November 12, 2019.
 
-The story was done in partnership with WTTW, for its digital documentary series, "WTTW Firsthand: Gun Violence.” The 15-episode series chronicles what Chicagoans are doing every day to fight for peace in their own communities. You can find the series, and The Trace’s other stories for the series, on [WTTW's project page]().
+The story was done in partnership with WTTW, for its digital documentary series, "WTTW Firsthand: Gun Violence.” The 15-episode series chronicles what Chicagoans are doing every day to fight for peace in their communities. You can find the series, and The Trace’s other stories for the series, on [WTTW's project page]().
 
-***
+<br>
 
 ## Data Analysis
 
-The data used for this analysis generally falls into three categories: Data available online, data that we obtained through public records requests, and manual categorizations that we created for the purpose of this analysis. The notebooks provide detail on each data source, important caveats, the code and methodology for the analysis, and the output of the analysis. Documentation, such as source notes, code tables, communication on public records requests, and reference materials, are included in the same folder as the relevant dataset(s). In some cases, Excel files contain additional source notes.
+The data used for this analysis generally falls into three categories: Government data available online, government data that we obtained through public records requests, and manual categorizations that we created for the purpose of this analysis. We also used sunrise and sunset times from [sunrise-sunset.org](https://sunrise-sunset.org/). The notebooks provide detail on each data source, important caveats, the code and methodology for the analysis, and the output of the analysis. Documentation, such as source notes, code tables, communication on public records requests, and reference materials, are included in the same folder as the relevant dataset(s). In some cases, Excel files contain additional source notes.
 
-***
+<br>
 
 ## Additional Stories and Resources
 
@@ -20,19 +20,21 @@ The Trace and BuzzFeed News did a sweeping analysis of clearance rates for the s
 
 In November, The Trace made available raw data containing incident-level records on 4.3 million murders, rapes, robberies and aggravated assaults, obtained through public records requests to 56 police and sheriff departments. Most of the datasets include case status. The data can be downloaded [here](https://www.thetrace.org/violent-crime-data/).
 
-***
+<br>
 
 ## Use Disclaimer
 
 We carefully checked the accuracy of our analysis, and shared our findings with the Chicago Police Department and several experts in the law enforcement, prior to publication. We are sharing our data, methodology, documentation, and code in order to support further research and reporting on gun violence. However, users of this data should independently verify the accuracy of their findings prior to making them public, as The Trace makes no representations or warranties as to any third party use of these materials.
 
-***
+<br>
 
 ## Licensing
 
-All code in this repository is available under the [MIT License](https://opensource.org/licenses/MIT). All data files are available under the [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) (CC BY 4.0) license.
+All code in this repository is available under the [MIT License](https://opensource.org/licenses/MIT). All output data files are available under the [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) (CC BY 4.0) license.
 
-***
+Refer to [sunrise-sunset.org](https://sunrise-sunset.org/api) for their use requirements if you publish statistics using their sunrise and sunset times.
+
+<br>
 
 ## Questions?
 

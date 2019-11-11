@@ -1,0 +1,527 @@
+---
+title: "Format Chicago Police Sworn Officer Data"
+output:
+  html_document:
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 9
+    code_folding: "hide"
+    highlight: monochrom
+    number_sections: yes
+    theme: cerulean
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+<br>
+
+The notebook formats Chicago Police Department (CPD) sworn officer data for analysis and estimates the number of sworn officers per unit per year.
+
+<br>
+
+## About This Data
+
+The Trace obtained sworn officer data by filing a public records request to CPD. The agency gave us the unit assignment for all active sworn officers (besides undercovers and officers assigned to the Mayor's Detail), but it denied our request for historic assignment data. We then asked the records unit to reproduce data posted on the [Invisible Institute's GitHub page](https://github.com/invinst/sworn-officer-import) in order order to ensure that we're using data that hasn't been altered by a third party.
+
+**CPD produced four spreadsheets for The Trace:**
+
+- A spreadsheet produced specifically for The Trace on Oct. 1, 2019 that contains the assignment for active sworn officers. All record of undercovers and officers assigned to the Mayor's Detail have been redacted. Nearly all narcotics officers, and a large share of gang officers, are undercover.
+    + This data is only used to count the number of sworn officers assigned to the three detective areas.
+- A spreadsheet containing the most recent assignment of all current and former officers, but that redacts all record of undercovers.
+    + This data is not used.
+- A spreadsheet originally generated on March 31, 2017 for Matt Kiefer that contains the most recent assignment of all current and former officers. Only the identifying details of undercovers are redacted; the record of assignment is not redacted.
+    + CPD regenerated the data for The Trace.
+    + We only pull resignation dates from this data if they are not in the assignment history data.
+- Employee assignment history data originally generated for Bocar Abdoulaye of Chicago University on October 12, 2016. CPD regenerated the data for The Trace. Undercovers are not redacted.
+    + This data is used to estimate the number of detectives per unit per year.
+    
+**Notes from Chicago PD FOIA officer:**
+
+Yes, CPD_Sworn_Employees_Redacted is a more current production than P058155_-_Kiefer. They do include some historical information of sworn personnel who had resigned/retired/left the Department. A couple things to note, these other spreadsheets were processed by a different unit, the Research and Analysis Division, who no longer review, analyze, and process such data for FOIA requests. In addition, the historical data that was previously produced does not capture all 183+ years' worth of CPD personnel in all its history; it was simply the compilation of the sworn personnel information that we had in our existing databases at the time of production.
+ 
+The data for your FOIA request was reviewed, analyzed, and processed by the Data Fulfillment and Analysis Section, which is a relatively new unit within the Information Services Division. To confirm, the data spreadsheet (with your name in it) contains current (at the time of the search) information from active sworn personnel whereas the others contain some personnel who are no longer with the Department, which is why some have resignation dates listed.
+
+*Additional documentation is included in the FOIA_CPD_staffing_data folder.*
+
+
+```{r packages}
+
+rm(list=ls())
+gc()
+
+# load default packages, functions, disable scientific notation
+source("./Functions/default.R")
+
+```
+
+<br>
+
+## Code table
+
+Create a code table defining unit numbers using FOIA data. Some are manually looked up.
+
+```{r code table}
+
+unit_codes <- read_excel("Input/FOIA_CPD_staffing_data/Original_FOIA/P058155_-_Kiefer.xlsx", guess_max = 4000000) %>%
+  clean_names() %>%
+  mutate(unit_code = str_pad(x_1, 3, pad = "0"),
+         date_resigned_inferred = case_when(!is.na(resignation_date) ~ ymd(resignation_date),
+                                            is.na(resignation_date)  ~ ymd("2017-04-01"),
+                                            TRUE ~ ymd(NA))) %>%
+  select(unit_code, unit_description, date_resigned_inferred) %>%
+  
+  bind_rows(
+    
+    (sworn_off <- read_excel("Input/FOIA_CPD_staffing_data/Original_FOIA/CPD_Sworn_Employees_Redacted.xlsx", guess_max = 3000000) %>%
+       clean_names() %>%
+       filter(!is.na(unit_number)) %>%
+       mutate(unit_code = str_pad(unit_number, 3, pad = "0"),
+              date_resigned = ymd(resignation_date),
+              # # make new "end date" for following quarter for officers who were current at time of output, 1-Jul-19 
+              date_resigned_inferred = case_when(!is.na(resignation_date) ~ ymd(resignation_date),
+                                                 is.na(resignation_date)  ~ ymd("2019-10-01"),
+                                                 TRUE ~ ymd(NA))) %>%
+       select(unit_code, unit_description = unit_name, date_resigned_inferred))
+  )  %>%
+  unique() %>%
+  filter(!is.na(unit_code)) %>%
+  mutate(unit_description = case_when(
+    # multiple similar names for three unit numbers
+    unit_code == "057" ~ "TRAFFIC SECTION DETAIL UNIT",
+    unit_code == "130" ~ "BUREAU OF STAFF SERVICES",
+    unit_code == "603" ~ "BOMB AND ARSON DIVISION",
+    
+    # looked up in code table
+    unit_code == "053" ~ "KENNEDY CONSTRUCTION",
+    unit_code == "057" ~ "TRAFFIC SECTION DETAIL UNIT",
+    unit_code == "058" ~ "SPECIAL FUNC CANINE",
+    unit_code == "059" ~ "MARINE OPERATIONS UNIT",
+    unit_code == "071" ~ "YOUTH DIVISION AREA 1",
+    unit_code == "072" ~ "YOUTH DIVISION AREA 2",
+    unit_code == "073" ~ "YOUTH DIVISION AREA 3",
+    unit_code == "074" ~ "YOUTH DIVISION AREA 4",
+    unit_code == "081" ~ "OEC-DIRECTOR OFFICE",
+    unit_code == "091" ~ "NARC SPECIAL ENFORCE",
+    unit_code == "092" ~ "NARC GENERAL ENFORCE",
+    unit_code == "134" ~ "FIELD TECHNOLOGY TRAINING UNIT",
+    unit_code == "138" ~ "FIELD MONITORING UNIT",
+    unit_code == "215" ~ "DEPUTY CHIEF - AREA 5",
+    unit_code == "216" ~ "DEPUTY CHIEF CENTRAL CONTROL GROUP",
+    unit_code == "314" ~ "GANG SECTION - AREA 4",
+    unit_code == "545" ~ "PBPA SERGEANT",
+    unit_code == "549" ~ "INSPECTOR GENERAL DETAIL UNIT",
+    unit_code == "660" ~ "UNKNOWN",
+    unit_code == "661" ~ "PROP CRIMES DDA 5",
+    
+    #inferred based on sequntial unit numbers of Area 1, 2, 3, 5 and 6 PAT NARC PROG
+    unit_code == "064" ~ "AREA 4 PAT NARC PROG",
+    TRUE ~ unit_description)) %>%
+  
+  # some unit numbers have multiple, but similar, descriptions, so we are going to pull the most recent ones used so it doesn't become a row multiplier.
+  arrange(unit_code, unit_description, date_resigned_inferred) %>%
+  group_by(unit_code) %>%
+  mutate(seq = row_number()) %>%
+  # take only unit description with max seq number  
+  group_by(unit_code) %>%
+  mutate(max_seq = max(seq),
+         take = ifelse(seq == max_seq, "Y", "N")) %>%
+  ungroup() %>%
+  filter(take == "Y") %>%
+  
+  select(unit_code, unit_description, unit_max_resign_date = date_resigned_inferred) %>%
+  filter(!is.na(unit_code)) %>%
+  unique() %>%
+  
+  # add manual unit categorizations for detective area, drug and gang
+  mutate(unit_type_inferred = case_when(
+    unit_description %in% c("DETECTIVE AREA - CENTRAL",
+                           "DETECTIVE AREA - SOUTH",
+                           "DETECTIVE AREA - NORTH",
+                           "DETECTIVE SECTION - AREA 4",
+                           "DETECTIVE SECTION - AREA 5",
+                           "PROP CRIMES DD AREA1",
+                           "PROP CRIMES DDA 2",
+                           "PROP CRIMES DDA 3",
+                           "PROP CRIMES DDA 4",
+                           "PROP CRIMES DDA 5",
+                           "PROP CRIMES DDA 5",
+                           "VIOLENT CRIMES DDA 1",
+                           "VIOLENT CRIMES DDA 2",
+                           "VIOLENT CRIMES DDA 3",
+                           "VIOLENT CRIMES DDA 4",
+                           "VIOLENT CRIME DDA 5") ~ "Detective Area",
+    unit_description %in% c("AREA 1 PAT NARC PROG",
+                           "AREA 2 PAT NARC PROG",
+                           "AREA 3 PAT NARC PROG",
+                           "AREA 4 PAT NARC PROG",
+                           "AREA 5 PAT NARC PROG",
+                           "AREA 6 PAT NARC PROG",
+                           "NARC SPECIAL ENFORCE",
+                           "NARC GENERAL ENFORCE",
+                           "NARCOTICS DIVISION") ~ "Drug",
+    
+    unit_description %in% c("GANG CRIME SECTION",
+                           "GANG INVESTIGATION DIVISION",
+                           "GANG ENFORCEMENT - AREA CENTRAL",
+                           "GANG ENFORCEMENT - AREA SOUTH",
+                           "GANG ENFORCEMENT - AREA NORTH",
+                           "GANG SECTION - AREA 4",
+                           "GANG SECTION - AREA 5",
+                           "GANG ENFORCEMENT DIVISION",
+                           "G/C UNIT SOUTH",
+                           "G/C UNIT WEST",
+                           "G/C UNIT NORTH") ~ "Gang",
+    TRUE ~ "Other"))
+  
+make_report(unit_codes)
+
+# inferred unit types
+unit_codes %>%
+  dt_simple()
+
+unit_codes %>%
+  group_by(unit_code) %>%
+  summarise(n = n_distinct(unit_type_inferred)) %>%
+  filter(n>1)
+
+```
+
+<br>
+
+## Current staff assignments
+
+Clean data of current staff assignments.
+
+- Produced for The Trace on Oct. 1, 2019.
+- Current sworn officers only. Undercovers and officers assigned to the Mayor's Detail have been redacted.
+
+```{r current}
+
+emp_current <- read_csv("Input/FOIA_CPD_staffing_data/14426_P522438_Ryley_Current_Sworn_Info_fix.csv", guess_max = 3000000) %>%
+  clean_names()
+
+emp_current <- emp_current %>%
+  mutate(
+    unit_code = str_pad(cpd_unit, 3, pad = "0"),
+    date_appointed = mdy(appointed_date1),
+    date_start = mdy(unit_start_date1)) %>%
+  # remove excess row
+  filter(!is.na(unit_code)) %>%
+
+# select records
+select(emp_first_name = first_nme,
+       emp_middle_i = middle_initial,
+       emp_last_name = last_nme,
+       emp_gender = sex_code_cd, 
+       emp_race = race, 
+       emp_yob = dobyear,
+       date_appointed, 
+       date_start,
+       unit_code,
+       unit_description = cpd_unit_descr,
+       emp_curr_title_code = employee_position_cd, 
+       emp_curr_title = employee_position_descr) %>%
+  
+  mutate(emp_uid = paste(emp_first_name, emp_last_name, date_appointed, emp_yob, sep = "_")) %>%
+  # no emp_uids with more than one entry
+  # group_by(emp_uid) %>%
+  # mutate(n = n()) %>%
+  # filter(n>1)
+  
+  left_join((unit_codes %>%
+               select(unit_code, unit_type_inferred) %>%
+               unique()), by = "unit_code") %>%
+  unique() %>%
+  select(sort(current_vars()))
+# report with altered data
+profile_missing(emp_current)
+
+names(emp_current)
+emp_current %>% 
+  filter(unit_type_inferred == "Detective Area") %>%
+  group_by(unit_code, unit_description) %>% 
+  summarise(n_emp = n_distinct(emp_uid)) %>%
+  adorn_totals()
+# Total detectives is 1058
+
+emp_current %>% 
+  group_by(unit_type_inferred) %>% 
+  summarise(n=n_distinct(emp_uid)) %>%
+  adorn_totals()
+
+# NA is STRATEGIC DATA ANALYTICS DIVISION
+emp_current %>% 
+  filter(is.na(unit_type_inferred)) %>%
+  group_by(unit_description) %>%
+  summarise(n = n())
+
+```
+
+<br>
+
+# Sworn officer last assignment
+
+Last assignment for every sworn officer. CPD reproduction of March 2017 public records request.
+
+- Most recent date: March 31, 2017
+- Originally produced for Matt Kiefer. CPD regenerated for The Trace.
+- Last or current assignment of all CPD sworn officers 
+- Anonymizes names of undercovers to "Police Officer", but includes record of existence.
+
+```{r old sworn_off}
+
+sworn_off <- read_excel("Input/FOIA_CPD_staffing_data/Original_FOIA/P058155_-_Kiefer.xlsx", guess_max = 40000) %>%
+  clean_names()
+
+# look for anonymized names
+sworn_off %>% filter(str_detect(first_name, "POLI") &
+                       str_detect(last_name, "OFF")) %>%
+  group_by(unit_description) %>%
+  summarise(n= n()) %>%
+  arrange(-n)
+
+# NARCOTICS DIVISION	318			
+# GANG INVESTIGATION DIVISION	200			
+# VICE & ASSET FORFEITURE DIVISION	61			
+# INTELLIGENCE SECTION	55	
+
+sworn_off %>% filter(str_detect(first_name, "POLI") &
+                       str_detect(last_name, "OFF")) %>%
+  group_by(year(resignation_date)) %>%
+  summarise(n= n()) %>%
+  arrange(-n)
+# Looks like nearly all current undercovers, or after production of assignment history data
+# NA	619			
+# 2017	9			
+# 2016	6
+
+```
+
+```{r sworn_off edit}
+
+sworn_off <- sworn_off %>%
+  mutate(unit_code = str_pad(x_1, 3, pad = "0"),
+         row_id = row_number(),
+         date_appointed = ymd(appointed_date),
+         # make new "end date" for officers who were current at time of output 31-Mar-17, which is the first day of the following quarter
+         date_resigned_inferred = case_when(!is.na(resignation_date) ~ ymd(resignation_date),
+                                      is.na(resignation_date) | status_i == "Y" ~ ymd("2017-04-01"),
+                                      TRUE ~ ymd(NA)),
+         date_resigned = ymd(resignation_date)) %>%
+
+  # select records
+  select(emp_first_name = first_name,
+         emp_middle_i = middle_initital,
+         emp_last_name = last_name,
+         emp_gender = gender, 
+         emp_race = race, 
+         emp_yob = d_o_b,
+         date_appointed, 
+         unit_code,
+         unit_description = unit_description,
+         emp_status = status_i, 
+         emp_last_title_code = employee_position_number, 
+         emp_last_title = description,
+         date_resigned,
+         date_resigned_inferred,
+         row_id) %>%
+  
+  # create uid, filter out what are likely duplicates, but it's only 8 employees
+  mutate(emp_uid = paste(emp_first_name, emp_last_name, date_appointed, emp_yob, sep = "_")) %>%
+  as.data.frame() %>%
+  
+  # join with unit codes
+  left_join((unit_codes %>%
+               select(unit_code, unit_type_inferred) %>%
+               unique()), by = "unit_code") %>%
+  unique() %>%
+  select(sort(current_vars()))
+
+sworn_off %>% 
+  group_by(unit_type_inferred) %>%
+  summarise(n=n_distinct(emp_uid)) %>%
+  adorn_totals()
+
+# NAs are NA unit code
+sworn_off %>% 
+  filter(is.na(unit_type_inferred)) %>%
+  group_by(unit_code, unit_description) %>%
+  summarise(n=n_distinct(emp_uid)) %>%
+  adorn_totals()
+
+```
+
+<br>
+
+# Sworn_Asgn: Assignment history
+
+From CPD:
+
+- One row per assignment. Undercovers not redacted.
+- Produced for third-party public records request. 
+- Employees whose status changed from sworn to civilian cannot be retrieved electronically.
+- Source: ClearDW; CPD_EMPLOYEES_MV, RACE_CODES, PPS_EMP_ASSIGNED_HISTORY_MV; Query on 12 October 2016.
+
+**Inferred field:**
+
+The assignment history data does not have an end date on the last assignment for many of the officers who have resigned. We pull the end date from sworn_off, if available, in order to calculate the number of officers on a unit at any given time. 
+
+```{r sworn asgn}
+
+sworn_asgn <- read_csv("Input/FOIA_CPD_staffing_data/FOIA_P052262_-_11221-FOIA-P052262-AllSwornEmployeesWithUOA.csv", guess_max = 2000000) %>%
+  clean_names() 
+
+sworn_asgn_edit <- sworn_asgn %>%
+  mutate(unit_code = str_pad(assigned_unit_num, 3, pad = "0"),
+         date_appointed = ymd(date_of_appointment),
+         date_start = ymd(start_date),
+         date_end = ymd(end_date),
+         row_id = row_number(),
+         
+         # this is just a dummy field for joining with quarters
+         link = "a") %>%
+  select(emp_first_name = first_name,
+         emp_middle_i = middle_initial,
+         emp_last_name = last_name,
+         emp_gender = gender, 
+         emp_race = race,
+         emp_yob = year_of_birth,
+         date_appointed,
+         date_start,
+         date_end,
+         unit_code,
+         row_id) %>%
+  mutate(emp_uid = paste(emp_first_name, emp_last_name, date_appointed, emp_yob, sep = "_")) %>%
+  # add definitions of units
+  left_join(unit_codes, by = "unit_code") %>%
+  unique() %>%
+
+   left_join(
+    (sworn_off %>%
+       select(emp_uid, 
+              sworn_off_date_resigned = date_resigned) %>%
+       unique()),
+    by = "emp_uid") %>%  
+  
+  # create an inferred end date using the resigned dates in the other dataset
+  mutate(date_end_inferred = case_when(
+    # use end date in underlying data if it's available
+    !is.na(date_end) ~ ymd(date_end),
+    # otherwise look for end date in the sworn_off data
+    !is.na(sworn_off_date_resigned) ~ ymd(sworn_off_date_resigned),
+    TRUE ~ ymd("2017-01-01")),
+  link = "a") %>%
+  group_by(row_id) %>%
+  mutate(n=n()) %>%
+  select(sort(current_vars()))
+
+# some row multiplication due to unique multiple resigned dates, but the only records that would affect our analysis are a handful of records in narcotics
+sworn_asgn_edit %>% 
+  filter(n>1) %>%
+  group_by(emp_uid, unit_type_inferred) %>%
+  summarise(n=n())
+
+
+```
+
+<br>
+
+# Join with quarters
+
+- Join sworn officer assignment history with a spreadsheet that I created containing the start-date of every quarter since 1980. 
+- Filter for assignments with start dates that are before or on the start date of that quarter *and*  with end dates that are greater than the start date of that quarter.
+- Count the number of distinct emp_uids per unit per quarter.
+- Estimate the number of sworn officers for the unit per year by averaging the total for each quarter. This is to roughly accounting for mid-year shifts in staffing.
+
+```{r quarter}
+
+### a file with every quarter since 1980 that I created manually because I was having trouble getting the time-period analysis to work
+quarter <- sworn_asgn_edit %>%
+  filter(year(date_end_inferred) >= 1980) %>%
+  left_join(
+    (read_excel("Input/Manual_Categorizations/month_year.xlsx") %>%
+       mutate(link = "a",
+              quarter = ymd(quarter)))
+    , by = "link") %>%
+  filter(date_start <= quarter & date_end_inferred > quarter) %>%
+  select(-c(link)) %>%
+  
+  group_by(unit_code,
+           unit_description,
+           unit_type_inferred,
+           quarter) %>%
+  summarise(n_emp_quarter = n_distinct(emp_uid)) %>%
+  
+  # make quarter average for year to account for people who were only on for a short period
+  group_by(unit_code,
+           unit_description,
+           unit_type_inferred,
+           year = year(quarter)) %>%
+  mutate(n_emp_year = round((mean(n_emp_quarter)),0)) %>%
+  select(unit_code, unit_description, unit_type_inferred, year, n_emp_year) %>%
+  unique() %>%
+  as.data.frame()
+
+```
+
+
+# Staff Stats
+
+- The number of sworn officers assigned to the detective areas shrank: from around 1,210 sworn officers in 2005 to 920 in 2016, according to The Trace’s analysis of CPD staff data. 
+- Over the same period, the number of sworn officers assigned to gang units grew from around 80 to 440. The narcotics units remained relatively constant at roughly 250 officers.
+- The department started increasing its detective ranks in 2017, and currently, around 1,060 sworn officers are assigned to the detective areas. 
+More recent statistics for gang and narcotics units are not available because CPD withheld undercover officers from the current assignment data it provided to The Trace. 
+
+
+```{r staff counts check}
+
+
+quarter %>%
+  filter(year >= 2000 & year <= 2016,
+           unit_type_inferred %in% c("Detective Area", "Drug", "Gang")) %>%
+  group_by(year, unit_type_inferred) %>%
+  summarise(n = sum(n_emp_year)) %>%
+  spread(unit_type_inferred, n) %>%
+  dt_bare()
+
+quarter %>%
+  filter(year >= 2000 & year <= 2016,
+           unit_type_inferred %in% c("Detective Area", "Drug", "Gang")) %>%
+  group_by(year, unit_type_inferred) %>%
+  summarise(n = sum(n_emp_year)) %>%
+  spread(unit_type_inferred, n) %>%
+  write_csv("Output/annual_staff_foia.csv")
+
+emp_current %>%
+  filter(unit_type_inferred == "Detective Area") %>%
+  group_by(unit_description) %>%
+  summarise(n = n()) %>%
+  adorn_totals()
+
+```
+
+<br>
+
+# Write csvs
+
+```{r write csvs}
+
+sworn_asgn_edit %>% write_csv("Output/staff_join_foia.csv")
+
+quarter %>% write_csv("Output/unit_annual_estimates.csv") 
+
+emp_current %>% write_csv("Output/staff_current_foia.csv") 
+
+```
+
+

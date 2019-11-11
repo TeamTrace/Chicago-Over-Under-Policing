@@ -1,20 +1,20 @@
 ---
-title: Prepare Chicago Crime Data
+title: Chicago Crime Data Prep
 output:
   html_document:
     fig_caption: yes
     fig_height: 4
     fig_width: 9
     highlight: monochrom
-    theme: cerulean
     number_sections: yes
+    theme: cerulean
     toc: yes
     toc_depth: 3
     toc_float:
       collapsed: no
 ---
 
-```{r setup, include = FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(
 	echo = TRUE,
 	message = FALSE,
@@ -24,7 +24,7 @@ knitr::opts_chunk$set(
 
 <br> 
 
-This notebook formats Chicago Police Department crime data for analysis, combining data from multiple sources.
+This notebook formats data from the Chicago Police Department and other sources for analysis.
 
 <br>
 
@@ -114,11 +114,10 @@ make_report(online)
 
 **Test for 2012 district changes:**
 
-For incidents prior to 2013, we checked to see if online data uses the depreciated district or the present day districts. It looks like the depreciated districts are not in the data at all, implying that the data uses the present-day district where the incident occurred.
+For incidents prior to 2013, we checked to see if online data uses the depreciated district or the present day districts. It looks like the depreciated districts are not in the online data at all, implying that the data uses the present-day district.
 
-- 13th closed, merged into the 12th. 
-- 21st closed and was split between the 1st and 2nd district, with a small piece going to the 9th.
-- 23rd closed on March 4 of 2012, and merged with the 19th.
+- In December 2012, the 13th closed and merged with the 12th. 
+- In March 2012, the 21st closed and was split between the 1st and 2nd district, with a small piece going to the 9th, and the 23rd closed and merged with the 19th.
 - Source: [Oct 2011 presentation](http://ward32.org/wp-content/uploads/2011/10/Mayor-CPD-Briefing-Consolidation-101211.pdf) and [chicagocop.com](https://www.chicagocop.com/archives/documents-archive/cartographs/)
 
 ```{r test districts}

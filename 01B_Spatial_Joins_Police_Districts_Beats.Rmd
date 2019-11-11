@@ -1,19 +1,22 @@
 ---
-title: Chicago PD Districts and Census Spatial Join
+title: Chicago PD Districts and Beats Census Spatial Join
 output:
-  html_document: 
-    fig_height: 6
-    fig_width: 6
-    highlight: monochrome
+  html_document:
+    fig_caption: yes
+    fig_height: 4
+    fig_width: 9
+    highlight: monochrom
+    number_sections: yes
     theme: cerulean
     toc: yes
-    toc_depth: 2
+    toc_depth: 3
     toc_float:
       collapsed: no
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
+	echo = TRUE,
 	message = FALSE,
 	warning = FALSE
 )
@@ -21,11 +24,11 @@ knitr::opts_chunk$set(
 
 <br>
 
-This notebook joins Chicago Police Department district and beat shapes with census tract shapes and statistics using the following sources:
+This notebook joins Chicago Police Department (CPD) district shapes with census tract shapes and statistics. The data covers 2001-2019. We use 2010 Census data for "All Years".
 
 **Police district boundaries** 
 
-The online data only includes current district.
+The Chicago PD closed three districts (13th, 21st, and 23rd) in 2012 as part of a cost-cutting plan to close a $636 million budget gap ([Chicago Tribune, March 3, 2012](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html)). However, the online data's police district field uses the present-day district, so we'll only do a spacial join using the current shape files. (The published portions of our analysis that use district-level demographics start in 2013.)
 
 - Current as of Dec. 19, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-current-/fthy-xz3r)
 - Depreciated December 18, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-deprecated-on-12-18-20/p3h8-xsd4). ([pdf map](https://news.wttw.com/sites/default/files/Map%20of%20Chicago%20Police%20Districts%20and%20Beats.pdf))
@@ -33,14 +36,9 @@ The online data only includes current district.
 **Police beats**
 
 - Current as of Dec. 19, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Beats-current-/aerh-rz74).
-- Depreciated December 18, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Beats-deprecated-on-12-18-2012-/kd6k-pxkv).
-     + Output coordinated system is EPSG:4326 WGS 84, according to [epsg.io](https://epsg.io/transform#s_srs=102671&t_srs=4326).
-     + Earlier in 2012, the 19th district merged into the 23rd district, and the 21st district was split between the 1st, 2nd, and a small portion into the 9th. The closures were part of a cost-cutting plan to reduce a $636 million budget gap, the [Chicago Tribune](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html) reported.
-    
 
 **Census Tracts**
 
-- Significant changes in census tracts. Note: Tracts changed in 2010, 2005-2009 ACS uses 2000 tracts, Via [Rob Paral](http://robparal.blogspot.com/2011/05/chicago-tract-changes.html).
 - 2010 Census Tracts, from city's [online data portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2010/5jrd-6zik).
 - 2000 Census Tracts, from city's [online data portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2000/pt6c-hxpp).
 
@@ -51,13 +49,9 @@ The online data only includes current district.
 - ACS 2010: Poverty, population earning $100K+
 - ACS 2015: Poverty
 
-**Notes on area and district changes:**
+**Note on "Hispanic or Latino" descent**
 
-The Chicago PD made the following changes to the police district jurisdictions in 2012:
-
-- 13th closed and merged with the 12th. 
-- 23rd closed and merged with the 19th.
-- 21st closed and merged with the 1st and 2nd district, with a small piece going to the 9th.
+We used U.S. Census data on people who identify as “Hispanic or Latino” to calculate the racial and ethnic demographics of each district. The Trace uses “Latino” because fewer than 1 percent of those identifying as “Hispanic or Latino” in Cook County are of Spanish origin; most descend from Latin America and the Caribbean.
 
 **Reference**
 
@@ -95,33 +89,28 @@ st_intersection_f <- function(table1, table2) {
 
 <br>
 
+# Load Data
+
+<br>
+
 ## Police District Shapes
 
 ```{r load dist}
 
 dist_current <- st_read("Input/CPD_district_shapes_current/geo_export_5a4ab56b-3798-4ed1-bd28-7774c5237614.shp") %>% 
-  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
   st_transform(crs = 4326) %>%
   mutate(dist_num = str_pad(dist_num, 3, pad = "0")) %>%
   mutate(area = st_area(geometry))
 plot(dist_current)
 
-dist_dep <- st_read("Input/CPD_district_shapes_deprecated_12_18_2012/geo_export_9b4cf2eb-ef20-4092-bc39-3b64d18aed69.shp") %>% 
-  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
-  st_transform(crs = 4326) %>%
-  mutate(dist_num = str_pad(dist_num, 3, pad = "0")) %>%
-  mutate(area = st_area(geometry))
-
 ```
 
-<br>
 
 ## Police Beat Shapes
 
 ```{r load beats}
 
 beats_current <- st_read("Input/Police_Beats_Current/geo_export_5d875d6d-1fd7-4754-8847-fcf5d0f5bc77.shp") %>% 
-  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
   st_transform(crs = 4326) %>%
   select(beat_curr = beat_num, 
          district_curr = district,
@@ -139,7 +128,6 @@ beats_current <- st_read("Input/Police_Beats_Current/geo_export_5d875d6d-1fd7-47
 
 tracts_2000 <- st_read("Input/Census_tracts_2000/geo_export_337cc9e4-2258-4a67-bd91-dd915899a317.shp") %>% 
   st_transform(crs = 4326) %>%
-  # GEOGCS["WGS84(DD)", DATUM["WGS84", SPHEROID["WGS84", 6378137.0, 298.257223563]], PRIMEM["Greenwich", 0.0], UNIT["degree", 0.017453292519943295], AXIS["Geodetic longitude", EAST], AXIS["Geodetic latitude", NORTH]]
   mutate(census_t_1 = as.character(census_t_1),
          tract_yr = "2000") %>%
   select(tract = census_t_1,
@@ -150,6 +138,7 @@ census_2000_names <- names(read_csv("Input/Census_Stats/DEC_00_SF3_P007/DEC_00_S
 
 census_2000 <- read_csv("Input/Census_Stats/DEC_00_SF3_P007/DEC_00_SF3_P007_with_ann.csv", 
                         col_names = census_2000_names, skip = 2) %>%
+  
        mutate(tract_blk_hisp = VD04 + VD10,
               tract_asian_pi = VD06 + VD07,
               tract_other = VD01 - (tract_blk_hisp + VD03 + tract_asian_pi),
@@ -175,7 +164,7 @@ tracts_2000 <- tracts_2000 %>%
        mutate(tract = as.character(tract)))
     , by = "tract") %>%
   
-  mutate(area = st_area(geometry))
+  mutate(area = st_area(geometry)) 
 
 ```
 
@@ -284,11 +273,11 @@ tracts_2017 <- tract_data_2010 %>%
 
 <br>
 
-## District and Census Spatial Join
+# District and Census Spatial Join
 
 Using [st_intersection](https://r-spatial.github.io/sf/reference/st_join.html): If a geometry or geography shares any portion of space then they intersect. ST_Intersects pulls in all Overlaps, Touches, Within all imply spatial intersection. If any of the aforementioned returns true, then the geometries also spatially intersect. Disjoint implies false for spatial intersection. I'm using this because the population within an RD is fluid.
 
-```{r dist depreciated}
+```{r dist}
 
 citywide <- bind_rows(
   st_set_geometry(tracts_2000, NULL), 
@@ -327,19 +316,6 @@ dist_tracts_current <- bind_rows(citywide, dist_tracts_current) %>%
   # select(-c(`fragment percent`)) %>%
   # drop all columns containing tract name instead of dist name
   select(-contains("tract_"))
-
-# Chicago population according to census:
-# 2000        2010
-# 2,896,000   2,698,000
-
-# Our calculations
-
-dist_tracts_current %>% 
-  filter(location_police_district_name != "Citywide") %>% 
-  group_by(cen_yr) %>% 
-  summarize(total = sum(dist_total))
-
-make_report(as.data.table(dist_tracts_current))
 
 ```
 
@@ -444,6 +420,94 @@ dist_tracts_sum_current <-
 
 ```
 
+## Combined fields
+
+```{r combined fields}
+
+dist_tracts_sum_current <- dist_tracts_sum_current %>%
+  #removing 31st police district because it's not a real district and isn't used in our analysis
+  filter(location_police_district != "031") %>%
+  
+  mutate(dist_bucket_per_blk_hisp = case_when(dist_percent_blk_hisp >= .8 ~ "80-100",
+                                              dist_percent_blk_hisp >= .6 ~ "60-80",
+                                              dist_percent_blk_hisp >= .4 ~ "40-60",
+                                              dist_percent_blk_hisp >= .2 ~ "20-40",
+                                              dist_percent_blk_hisp >= 0 ~ "0-20",
+                                              TRUE ~ as.character(NA)),
+         dist_bucket_per_blk_hisp = factor(dist_bucket_per_blk_hisp, 
+                                           levels=c("0-20", "20-40", "40-60", 
+                                                    "60-80", "80-100"), 
+                                           labels=c("0-20", "20-40", "40-60", 
+                                                    "60-80", "80-100")),
+         dist_bucket_per_white = case_when(dist_percent_white >= .8 ~ "80-100",
+                                           dist_percent_white >= .6 ~ "60-80",
+                                           dist_percent_white >= .4 ~ "40-60",
+                                           dist_percent_white >= .2 ~ "20-40",
+                                           dist_percent_white >= 0 ~ "0-20",
+                                           TRUE ~ as.character(NA)),
+         dist_bucket_per_white = factor(dist_bucket_per_white, 
+                                        levels=c("0-20", "20-40", "40-60", 
+                                                 "60-80", "80-100"), 
+                                        labels=c("0-20", "20-40", "40-60", 
+                                                 "60-80", "80-100")),
+         # add present-day police area
+         location_area = recode(location_police_district,
+                                `011` = "North",
+                                `014` = "North",
+                                `015` = "North",
+                                `016` = "North",
+                                `017` = "North",
+                                `019` = "North",
+                                `020` = "North",
+                                `024` = "North",
+                                `025` = "North",
+                                `001` = "Central",
+                                `002` = "Central",
+                                `003` = "Central",
+                                `008` = "Central",
+                                `009` = "Central",
+                                `010` = "Central",
+                                `012` = "Central",
+                                `018` = "Central",
+                                `004` = "South",
+                                `005` = "South",
+                                `006` = "South",
+                                `007` = "South",
+                                `022` = "South",
+                                `099` = "Citywide")) 
+
+```
+
+## Check data
+
+```{r check stats}
+
+dist_tracts_sum_current %>% group_by(dist_bucket_per_blk_hisp) %>% summarise(n=n())
+dist_tracts_sum_current %>% group_by(location_area) %>% summarise(n=n())
+# make sure each district has a population for all years:
+dist_tracts_sum_current %>%
+  group_by(location_police_district, year) %>%
+  summarise(n = round((sum(dist_total)), 0)) %>%
+  spread(year, n)
+
+```
+
+**Checking the population sum of the districts with Chicago's total population**
+
+Citywide population, according to Census: 
+
+- 2000: 2,896,000
+- 2010: 2,698,000
+
+```{r check total population}
+
+dist_tracts_sum_current %>% 
+  filter(location_police_district_name != "Citywide") %>% 
+  group_by(year) %>% 
+  summarize(total = sum(dist_total))
+
+```
+
 ```{r report final}
 
 make_report(as.data.table(dist_tracts_sum_current))
@@ -452,7 +516,7 @@ make_report(as.data.table(dist_tracts_sum_current))
 
 <br>
 
-### Write csv
+## Write districts csv
 
 ```{r write dist csv}
 
@@ -461,3 +525,229 @@ dist_tracts_sum_current %>% write_csv("Output/police_districts_tracts_sum.csv")
 ```
 
 <br>
+
+# Beats and Census Join
+
+Spatial join on beats is being used only as a back-stop for the analysis. Only using current beat shapes and Census data from 2013 through present. 
+
+```{r beat}
+
+citywide <- bind_rows(
+  st_set_geometry(tracts_2010, NULL),
+  st_set_geometry(tracts_2017, NULL)) %>%
+  mutate(beat_curr = "099",
+         district_curr = "099",
+         `fragment percent` = 1) %>%
+  select(-c(area)) 
+  
+beats_tracts_current <- bind_rows(
+    (st_intersection_f(tracts_2010, beats_current)),
+    (st_intersection_f(tracts_2017, beats_current))) %>% 
+  select(-c(area.1, `fragment area`, area)) %>% 
+  group_by(tract_yr, tract) %>%
+  mutate(total_pct = sum(`fragment percent`)) %>%
+  mutate(`fragment percent` = `fragment percent` * 1 / total_pct)
+
+
+beats_tracts_current <- bind_rows(citywide, beats_tracts_current) %>%
+  replace(., is.na(.), 0) %>%
+  # calculate the total in the tract by the percent of the tract within the police beat
+  mutate(beat_total = as.numeric(tract_total * `fragment percent`),
+         beat_blk_hisp = as.numeric(tract_blk_hisp * `fragment percent`), 
+         beat_asian_pi = as.numeric(tract_asian_pi * `fragment percent`),
+         beat_other = as.numeric(tract_other * `fragment percent`),
+         beat_white = as.numeric(tract_white * `fragment percent`),
+         beat_blk = as.numeric(tract_blk * `fragment percent`),
+         beat_hisp = as.numeric(tract_hisp * `fragment percent`),
+         beat_100Kplus = as.numeric(tract_100Kplus * `fragment percent`)
+         ) %>%
+  rename(location_police_beat = beat_curr,
+         location_police_district = district_curr,
+         cen_yr = tract_yr) %>%
+  # select(-c(`fragment percent`)) %>%
+  # drop all columns containing tract name instead of dist name
+  select(-contains("tract_"))
+
+make_report(as.data.table(beats_tracts_current))
+
+```
+
+
+## Beats summary
+
+- Sum all beats within district
+- Create a "Citywide" summary
+- Calculate each year in between census using the average change per year
+- Calculate percentages
+
+```{r beats sum}
+
+leftovers <- beats_tracts_current %>% 
+  filter(is.na(location_police_district))
+
+beats_tracts_sum_current <- beats_tracts_current %>%
+       # sum all the census tract values per district
+       group_by(location_police_beat, location_police_district,
+                cen_yr) %>%
+       summarise_if(is.numeric, (funs(sum))) %>% 
+  select(-c(`fragment percent`, total_pct))
+
+beats_tracts_sum_current <- beats_tracts_sum_current %>% 
+  # take out excess rows when 2015 is all NA values
+  filter(beat_total>1) %>%
+  select(location_police_beat, location_police_district,
+         cen_yr, everything()) %>%
+  gather("measure", "value", beat_total:beat_100Kplus) %>%
+  spread(cen_yr, value) %>%
+  
+  # calculate an even amount of change between the censuses to calculate the years in between
+  mutate(change_10_17 = (`2017` - `2010`)/ 7) %>%
+  
+  mutate(
+         `2011` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2010`+ change_10_17),
+         `2012` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2011`+ change_10_17),
+         `2013` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2012`+ change_10_17),
+         `2014` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2013`+ change_10_17),
+         `2015` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2014`+ change_10_17),
+         `2016` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2015`+ change_10_17),
+         `2018` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2017`+ change_10_17),
+         `2019` = ifelse(measure == "beat_100Kplus", `2010`,
+                         `2018`+ change_10_17)
+  ) %>% 
+         
+
+  select(-c(change_10_17)) %>%
+  gather("year", "value", `2010`:`2019`) %>%
+  spread(measure, value) %>%
+  
+  # calcculate percents
+  mutate(beat_percent_blk_hisp = round((beat_blk_hisp/beat_total), digits = 2),
+         beat_percent_white = round((beat_white/beat_total), digits = 2),
+         beat_percent_blk = round((beat_blk/beat_total), digits = 2),
+         beat_percent_hisp = round((beat_hisp/beat_total), digits = 2),
+         beat_percent_non_white = 1 - beat_percent_white,
+         beat_percent_100Kplus = round((beat_100Kplus/
+                                           beat_total[which(year == "2010")]), digits = 2)) 
+
+# Make an "all years" row using 2010 numbers
+beats_tracts_sum_current <- 
+  bind_rows(
+    beats_tracts_sum_current,
+    (
+      beats_tracts_sum_current %>%
+        filter(year == "2010") %>%
+        mutate(year = "All Years")
+    )
+  )
+
+```
+
+## Combined fields
+
+```{r beats combined fields}
+
+beats_tracts_sum_current <- beats_tracts_sum_current %>%
+  as.data.frame() %>%
+  #removing 31st police district because it's not a real district and isn't used in our analysis
+  filter(location_police_district != "031") %>%
+  mutate(location_police_district = str_pad(location_police_district, 3, pad = "0"),
+         beat_bucket_per_blk_hisp = case_when(beat_percent_blk_hisp >= .8 ~ "80-100",
+                                              beat_percent_blk_hisp >= .6 ~ "60-80",
+                                              beat_percent_blk_hisp >= .4 ~ "40-60",
+                                              beat_percent_blk_hisp >= .2 ~ "20-40",
+                                              beat_percent_blk_hisp >= 0.00 ~ "0-20",
+                                              TRUE ~ as.character(NA)),
+         beat_bucket_per_blk_hisp = factor(beat_bucket_per_blk_hisp, 
+                                           levels=c("0-20", "20-40", "40-60", 
+                                                    "60-80", "80-100"), 
+                                           labels=c("0-20", "20-40", "40-60", 
+                                                    "60-80", "80-100")),
+         beat_bucket_per_white = case_when(beat_percent_white >= .8 ~ "80-100",
+                                              beat_percent_white >= .6 ~ "60-80",
+                                              beat_percent_white >= .4 ~ "40-60",
+                                              beat_percent_white >= .2 ~ "20-40",
+                                           beat_percent_white >= 0.00 ~ "0-20",
+                                              TRUE ~ as.character(NA)),
+         beat_bucket_per_white = factor(beat_bucket_per_white, 
+                                           levels=c("0-20", "20-40", "40-60", 
+                                                    "60-80", "80-100"), 
+                                           labels=c("0-20", "20-40", "40-60", 
+                                                    "60-80", "80-100")),
+         # add present-day police area
+         location_area = recode(location_police_district,
+                                `011` = "North",
+                                `014` = "North",
+                                `015` = "North",
+                                `016` = "North",
+                                `017` = "North",
+                                `019` = "North",
+                                `020` = "North",
+                                `024` = "North",
+                                `025` = "North",
+                                `001` = "Central",
+                                `002` = "Central",
+                                `003` = "Central",
+                                `008` = "Central",
+                                `009` = "Central",
+                                `010` = "Central",
+                                `012` = "Central",
+                                `018` = "Central",
+                                `004` = "South",
+                                `005` = "South",
+                                `006` = "South",
+                                `007` = "South",
+                                `022` = "South")) 
+```
+
+## Check data
+
+```{r beats check stats}
+
+beats_tracts_sum_current %>% group_by(beat_bucket_per_blk_hisp) %>% summarise(n=n())
+beats_tracts_sum_current %>% group_by(location_area) %>% summarise(n=n())
+# make sure each district has a population for all years:
+beats_tracts_sum_current %>%
+  group_by(location_police_beat, year) %>%
+  summarise(n = round((sum(beat_total)), 0)) %>%
+  spread(year, n)
+
+```
+
+**Checking the population sum of the districts with Chicago's total population**
+
+Citywide population, according to Census: 
+
+- 2000: 2,896,000
+- 2010: 2,698,000
+
+```{r beats check total population}
+
+beats_tracts_sum_current %>%
+  filter(!is.na(beat_total) & location_police_district != "099") %>%
+  group_by(year) %>%
+  summarise(n = round((sum(beat_total)), 0)) 
+
+```                                
+
+```{r beat report final}
+
+make_report(as.data.table(beats_tracts_sum_current))
+
+```
+
+<br>
+
+## Write beats csv
+
+```{r write beat csv}
+
+beats_tracts_sum_current %>% write_csv("Output/police_beats_tracts_sum.csv")
+
+```

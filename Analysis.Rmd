@@ -5,6 +5,7 @@ output:
     fig_caption: yes
     fig_height: 4
     fig_width: 9
+    code_folding: "hide"
     highlight: monochrom
     number_sections: yes
     theme: cerulean
@@ -16,17 +17,15 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
-	echo = FALSE,
-	fig.align = "center",
+	echo = TRUE,
 	message = FALSE,
-	warning = FALSE,
-	width.cutoff = 10
+	warning = FALSE
 )
 ```
 
 <br>
 
-# Introduction
+## Introduction
 
 This notebook examines the Chicago Police Department's low rates of arrest for shootings and other violent crimes, and the "over-policing/under-policing" paradigm that exists in many of the city's predominantly black and Latino neighborhoods.
 
@@ -53,17 +52,11 @@ We combined information from the following sources with the Chicago PD's online 
     + Victim name, age, gender, and race/ethnicity.
 - All shootings (fatal and nonfatal), Jan. 1, 2010 through Aug. 31, 2019.
     + The only additional information, beyond what's in the online data, is the detailed case status and that the incident was classified as a shooting.
-- Our [standardized data](https://github.com/the-trace-and-buzzfeed-news/local-police-data-analysis) used for the analysis in our story with BuzzFeed News, [Shoot Someone In a Major U.S. City, and Odds Are You’ll Get Away With It](https://www.thetrace.org/features/murder-solve-rate-gun-violence-baltimore-shootings/), with updated NYPD data added.
+- Current assignment and assignment history for sworn officers.
 
 **Note on police districts**
 
-The Chicago PD made the following changes to the police district jurisdictions in 2012 as part of a [cost-cutting plan](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html):
-
-- 13th was closed and merged with the 12th. 
-- 23rd was closed and merged with the 19th.
-- 21st was closed and merged with the 1st and 2nd, with a small piece going to the 9th.
-
-The closed districts are not used in the online data at all, including for the years when they were open, indicating that all incidents are located by their present-day district. However, to ensure accuracy, we limit our district-level demographic analyses to the years starting in 2013.
+The Chicago PD closed the 13th, 21st and 23rd districts in 2012 as part of a [cost-cutting plan](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html). The closed districts are not used in the online data at all, including for the years when they were open, indicating that all incidents are located by their present-day district. To ensure accuracy, we limit our district-level demographic analyses to the years starting in 2013.
 
 **Manual categorizations**
 
@@ -115,16 +108,11 @@ We infer population and other demographic counts for the years between the censu
 - ACS 2010: Poverty, population earning $100K+
 - ACS 2015: Poverty
 
+**Note on "Hispanic or Latino" descent**
+
+We used U.S. Census data on people who identify as “Hispanic or Latino” to calculate the racial and ethnic demographics of each district. The Trace uses “Latino” because fewer than 1 percent of those identifying as “Hispanic or Latino” in Cook County are of Spanish origin; most descend from Latin America and the Caribbean.
+
 <br>
-
-#### Sworn officer data {-}
-
-Currently, we use data on the Chicago PD's sworn officer assignment from the Invisible Institute's
-[GitHub page](https://github.com/invinst/sworn-officer-import). We filed a FOIA request for this data, but have not received it.
-
-- The earliest assignment date is Sept. 1, 1932. The most recent is March 5, 2016.
-- Some unit codes are not defined. In some instances we were able to find the definitions online.
-- We manually group these units into a few categories for the analysis, such as "Gang", "Detective", "Narcotics", "Patrol", and for the rest, "Other".
 
 #### Reviewers {-}
 
@@ -148,69 +136,22 @@ gc()
 # load default packages, functions, disable scientific notation
 source("./Functions/default.R")
 
-districts <- read_csv("Output/police_districts_tracts_sum.csv", guess_max = 5000) %>%
+```
+
+```{r load data}
+
+beats <- read_csv("Output/police_beats_tracts_sum.csv", guess_max = 5000) %>%
   filter(location_police_district != "099") %>%
-  mutate(year = as.character(year),
-         location_police_district = str_pad(location_police_district, 3, pad = "0"),
-         dist_bucket_per_blk_hisp = case_when(dist_percent_blk_hisp >= .8 ~ "80-100",
-                                              dist_percent_blk_hisp >= .6 ~ "60-80",
-                                              dist_percent_blk_hisp >= .4 ~ "40-60",
-                                              dist_percent_blk_hisp >= .2 ~ "20-40",
-                                              TRUE ~ "0-20"),
-         dist_bucket_per_blk_hisp = factor(dist_bucket_per_blk_hisp, 
-                                           levels=c("0-20", "20-40", "40-60", 
-                                                    "60-80", "80-100"), 
-                                           labels=c("0-20", "20-40", "40-60", 
-                                                    "60-80", "80-100")),
-         dist_bucket_per_white = case_when(dist_percent_white >= .8 ~ "80-100",
-                                              dist_percent_white >= .6 ~ "60-80",
-                                              dist_percent_white >= .4 ~ "40-60",
-                                              dist_percent_white >= .2 ~ "20-40",
-                                              TRUE ~ "0-20"),
-         dist_bucket_per_white = factor(dist_bucket_per_white, 
-                                           levels=c("0-20", "20-40", "40-60", 
-                                                    "60-80", "80-100"), 
-                                           labels=c("0-20", "20-40", "40-60", 
-                                                    "60-80", "80-100")),
-         # add present-day police area
-         location_area = recode(location_police_district,
-                                `011` = "North",
-                                `014` = "North",
-                                `015` = "North",
-                                `016` = "North",
-                                `017` = "North",
-                                `019` = "North",
-                                `020` = "North",
-                                `024` = "North",
-                                `025` = "North",
-                                `001` = "Central",
-                                `002` = "Central",
-                                `003` = "Central",
-                                `008` = "Central",
-                                `009` = "Central",
-                                `010` = "Central",
-                                `012` = "Central",
-                                `018` = "Central",
-                                `004` = "South",
-                                `005` = "South",
-                                `006` = "South",
-                                `007` = "South",
-                                `022` = "South")) 
-
-names(districts)
-
-crime_org <- read_csv("Output/crime_clean.csv", guess_max = 8000000)
-
-names(crime)
-
-#online <- read_csv("Input/Online_Crime/Crimes_-_2001_to_present.csv", guess_max = 8000000)
-
-#online <- online %>%
-#  mutate(id = str_pad(ID, 8, pad = "0"))
+  rename(location_beat = location_police_beat)
+  
+districts <- read_csv("Output/police_districts_tracts_sum.csv", guess_max = 5000)
 
 ```
 
-```{r crime adds}
+
+```{r crime}
+
+crime_org <- read_csv("Output/crime_clean.csv", guess_max = 8000000)
 
 # add time, area, watch fields
 crime <- crime_org %>%
@@ -278,144 +219,21 @@ crime <- crime_org %>%
 crime %>% group_by(location_area, detective_watch) %>% summarise(n=n()) %>% spread(location_area, n)
 
 shot <- crime %>% filter(shot_cat != "Other")
- 
+
+# remove crime_org from global environment 
 rm(crime_org)
 
-
+crime %>% group_by(location_police_district) %>% summarise(n=n()) %>% dt_bare()
 
 ```
 
 <br>
-
-<br>
-
-# National Cleared/Arrest Rate for Shootings
-
-Chicago ranks at the bottom in the share of fatal and nonfatal shootings that are cleared/result in an arrest.
-
-Dashed line is the median % Cleared and/or Arrest of all cities that year.
-
-**Fatal shooting agencies compared (20)**
-
-- Baltimore PD				
-- Boston PD				
-- Chicago PD				
-- Cincinnati PD				
-- Colorado Springs PD				
-- Dallas PD				
-- Denver PD				
-- Houston PD				
-- Las Vegas MPD				
-- Los Angeles PD
-- Louisville MPD				
-- New York PD				
-- Newark PD				
-- Orlando PD				
-- Philadelphia PD				
-- Pittsburgh PD				
-- San Diego PD				
-- San Francisco PD				
-- St Louis MPD				
-- Tucson PD
-
-**Nonfatal shooting agencies compared (8)**
-
-- Baltimore PD				
-- Boston PD	
-- Chicago PD	
-- Los Angeles PD				
-- Newark PD	
-- New Orleans PD				
-- New York PD			
-- San Francisco PD				
-
-
-```{r national}
-
-national <- read_csv("Input/national_standardized_nypd_add.csv", guess_max = 3000000) 
-
-national_trim <- national %>%
-  # take only shootings
-  filter(
-    (str_detect(offense_category, "NON FATAL") | 
-       str_detect(offense_category, "NON-FATAL") |
-       offense_group %in% c("Non-Fatal Shooting", "Homicide - Gun")) &
-      # removing chicago because we'll replace with new data, and wilmington because pop in < 100K
-      !agency_name %in% c("CHICAGO-PD", "WILMINGTON-PD") &
-      # removing cases without clear status
-      clearance_group != "Null, Missing, Unclear" & !is.na(clearance_group)) %>% 
-  mutate(offense = ifelse(offense_group == "Homicide - Gun", "Fatal Shooting", "Nonfatal Shooting"),
-         status = ifelse(clearance_group == "Open & No Arrest-Unspecified", "Open", "Cleared and/or Arrest"),
-         # clean up names
-         agency_name = str_to_title(str_replace_all(agency_name, "-", " ")),
-         agency_name = str_replace_all(agency_name, "Pd", "PD"),
-         agency_name = str_replace_all(agency_name, "Mpd", "MPD"),
-         agency_name = recode(agency_name,
-                              `New York City PD` = "New York PD"),
-         occurred_date = ymd(occurred_date)) %>%
-  select(id = agency_incident_id,
-         date_occurred = occurred_date, 
-         offense, 
-         agency = agency_name, 
-         status) %>%
-  unique()
-
-national_trim <- shot %>%
-  filter(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") &
-           !is.na(status)) %>%
-  mutate(agency = "Chicago PD",
-         status = ifelse(status %in% c("0-OPEN ASSIGNED", "1-SUSPENDED"), "Open", "Cleared and/or Arrest"),
-         date_occurred = ymd(substr(date_occurred, 1,10))) %>%
-  select(id = id_case_number,
-         date_occurred,
-         offense = shot_cat,
-         agency,
-         status) %>%
-  unique() %>%
-  bind_rows(national_trim) %>%
-  # in case two agencies have the same incident id
-  mutate(id = paste(agency, id, sep = "_")) %>%
-  filter(year(date_occurred) >= 2010 & year(date_occurred) < 2017)
-  
-
-national_table <- national_trim %>%
-  group_by(agency, offense, year = year(date_occurred), status) %>%
-  summarise(n_status=n()) %>%
-  group_by(agency, offense, year) %>%
-  mutate(n_total = sum(n_status),
-         pct_status = n_status/n_total,
-         agency_color = ifelse(agency %in% c("Los Angeles PD", "New York PD", "Chicago PD", "Houston PD"), agency, "Other City")) %>%
-  filter(status == "Cleared and/or Arrest") %>%
-  group_by(offense, year) %>%
-  mutate(median = median(pct_status)) 
-
-national_table %>%
-  ggplot(aes(x = year, y = pct_status, color = agency_color)) +
-  geom_point(aes(x = year, y = pct_status, fill = agency_color), 
-              shape=21, size = 3, alpha = 0.75, color="black") +
-  geom_line(aes(x = year, y = median), linetype = "dashed", color = "black") + 
-  facet_wrap(~ offense, scales = "free_y") +
-  theme(legend.position="top", legend.title=element_blank()) +
-  ggtitle("Chicago vs. Other Major Cities") +
-  ylab("% Cleared and/or Arrest") +
-  xlab("Year")
-
-national_table %>%
-  select(agency, offense, year, pct_status) %>%
-  spread(year, pct_status) %>%
-  dt_filter() %>%
-  formatPercentage(c(2:10), 0)
-
-rm(national, national_table, national_trim)
-
-```
-
 
 <br>
 
 # Violent Crime Arrest Rates, Counts, Rates Per 100K
 
-The following charts look at the arrest rate, number of incidents, and rate per 100,000 residents, for UCR murder, rape, robbery, and assault/battery, along with what Chicago PD has classified as "shootings." We use the online "arrest" status here since this is the variable we have for all incidents. 
+The following charts calculate the arrest rate, number of incidents, and rate per 100,000 residents, for UCR murder, rape, robbery, and assault/battery, along with what Chicago PD has classified as "shootings." We use the online "arrest" status here since this is the variable we have for all incidents. 
 
 The X intercepts are 2010 (the year we have all shootings classified as such, per Chicago PD FOIL data) and 2012 (year of consolidation)
 
@@ -494,8 +312,6 @@ crime_stats <- crime %>%
          `Rate per 100K` = rate) %>%
   arrange(Category, Year)
 
-crime_stats %>% write_csv("Output/summary_tables/crime_stats.csv")
-
 # write function so all charts are plotted the same
 chart_plot <- function(table) {
   table %>%
@@ -516,6 +332,7 @@ chart_plot <- function(table) {
 
 ```
 
+## All Part I Violent
 
 ```{r all ucr, echo=FALSE, fig.height=3, fig.width=10}
 
@@ -527,7 +344,7 @@ crime_stats %>%
 
 <br>
 
-**Murders:**
+## Murder
 
 - For gun murders, arrest rate fell from 60% in 2001 to 23% last year, while it stayed somewhat steady for other murders. 
 - The number and rate of gun murders saw a decline from around 2003 through 2015, but it hit a two-decade high in 2016, and was the same last year as in 2001. Meanwhile, murders committed using other weapons or physical force have continued a downward trend.
@@ -542,11 +359,8 @@ crime_stats %>%
 
 <br>
 
-**Shootings and UCR Gun Crimes:**
+## Shootings and UCR Gun Crimes
 
-- Findings:
-    + The arrest rate for nonfatal shootings has dropped from 15% in 2001 to 6% last year.
-    + The number of *nonfatal* shootings last year was about the same as in 2010, but the number of *all shootings* was much higher.
 - Caveats:
     + "Nonfatal shootings" does not include rapes and robberies from prior to 2010 that were nonfatal shootings, which is probably around 7% of all nonfatal shootings, based on the share from 2010 onward. (Only a handful of those were rapes, the rest were  robberies). The dashed line is 2010.
     + "All Shootings" includes fatal shootings, nonfatal shootings (victim was shot), and firearm discharges. Firearm discharge is more accurate prior to 2010 because there are specific IUCR codes that indicate firearm discharge.
@@ -562,10 +376,7 @@ crime_stats %>%
 
 <br>
 
-**Robbery and Assault/Battery:**
-
-- The chance of an arrest in a robbery has always been low - around 7% for gun robberies.
-- The rates of gun robberies and gun assaults and battery are all down from 2001, but saw upticks starting in 2014.
+## Robbery and Assault/Battery
 
 "Other Robbery" and "Other Battery and Assaults" includes incidents where the weapon was unspecified, which includes most carjackings and child abuse assaults.
 
@@ -580,7 +391,7 @@ crime_stats %>%
 
 <br>
 
-**Table for all categories**
+## Table
 
 ```{r crime stat table, echo=FALSE}
 
@@ -588,14 +399,16 @@ crime_stats %>% arrange(Category, Year) %>% dt_filter() %>% formatPercentage("% 
 
 ```
 
-```{r total crimes}
+### Count of gun crimes
+
+```{r total gun crimes}
 
 shot %>%
   group_by(shot_cat) %>%
-  summarise(n = n_distinct(id_case_number))
+  summarise(n = n_distinct(id_case_number)) %>%
+  dt_bare()
 
-41264	+ 7722
-# more than 49,000 because this does not include robberies that were nonfatal shootings prior to 2010
+41267	+ 7720
 
 ```
 
@@ -633,18 +446,11 @@ For homicides, the online arrest field is *overly* generous, marking incidents a
 
 For nonfatal shootings, it's the opposite: The online arrest flag does not capture partial or exceptional clearances, which account for another 7% of all shootings since 2010.
 
-#### Homicides: {-}
+### Homicides
 
 The online arrest field and the FOIA cleared field match up almost exactly. All cases with arrest marked "False" are marked as not cleared ("N") in the FOIA data. All but 7 of the cases with arrest marked "True" are marked as cleared ("Y") in the FOIA data.
 
 ```{r status arrest v cleared}
-
-# crime %>% filter(crime_primary_type == "Homicide") %>%
-#   group_by(id_case_number) %>%
-#   summarise(n = n_distinct(status_arrest)) %>%
-#   group_by(n) %>%
-#   count(n_distinct(id_case_number))
-# Three of the 9411 homicide incidents, each with two victms, has a different arrest status for each victim. Those incidents would be counted under both "arrest" and "no arrest".
 
 shot %>%
   filter(shot_cat %in% c("Fatal Shooting", "Other Homicide") & !is.na(status_cleared)) %>%
@@ -670,29 +476,14 @@ shot %>%
 
 ```
 
-
-```{r clearance rate}
-
-table <- shot %>%
-  filter(crime_primary_type == "Homicide") %>%
-  group_by(year = year(date_occurred)) %>%
-  summarise(total_year = n_distinct(id))
-
-shot %>%
-  filter(crime_primary_type == "Homicide") %>%
-  group_by(year = year(date_cleared)) %>%
-  summarise(total_cleared = n_distinct(id)) %>%
-  left_join(table, by = "year") %>%
-  mutate(clearance_rate = total_cleared/total_year) %>%
-  dt_simple_long() %>%
-  formatPercentage(c("Clearance Rate"),0)
-
-```
-
-
 <br>
 
+#### Online vs. FOIA status for gun murders {-}
+
+This line chart shows that there's a big difference between the two statuses for all years going back to 2010, not just more recent years, which might suggest the detailed case status isn't as up-to-date.
+
 ```{r cleared shootings comparison chart}
+
 shot %>%
   filter(shot_cat == "Fatal Shooting" & !is.na(status) & !is.na(status_cleared) & 
            year(date_occurred) != "2019") %>%
@@ -716,20 +507,17 @@ shot %>%
 
 ```{r hom year}
 
-hom %>%
-  filter(date_occurred <= "2019-08-31") %>%
+shot %>%
+  filter(date_occurred <= "2019-08-31" & crime_primary_type == "Homicide") %>%
   group_by(status_cleared) %>%
-  summarise(n=n())
-
-# status_cleared
-# N	5208			
-# Y	4551	
+  summarise(n=n()) %>%
+  adorn_one_col()
 
 ```
 
 <br>
 
-#### Nonfatal Shootings {-}
+### Nonfatal Shootings
 
 For nonfatal shootings, the online arrest flag does not capture exceptional clearances and partial clearances, which would be another 7% of shootings.
 
@@ -760,6 +548,8 @@ Detailed case status for shootings by crime classification, from the FOIA data.
 - 6-EX CLEARED OPEN: One or more offenders identified, whereabouts known and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender	
 - 7-CLOSED NON-CRIMINAL: Incident not criminal in nature
 
+#### All Years Combined {-}
+
 ```{r total case status by crime type}
 
 shot %>% 
@@ -786,7 +576,7 @@ shot %>%
 
 <br>
 
-### Case status by year
+#### Case status by year % {-}
 
 ```{r detailed case status by year}
 
@@ -808,10 +598,6 @@ table <- shot %>%
   mutate(total = sum(total_status),
          percent_status = total_status/total)
 
-```
-
-```{r table shot percent, echo=FALSE}
-
 table %>%
   select(`Crime Group`, status, year, percent_status) %>%
   arrange(`Crime Group`, status) %>%
@@ -822,6 +608,8 @@ table %>%
 ```
 
 <br>
+
+#### Case status by year # {-}
 
 ```{r table dt simple counts}
 
@@ -835,7 +623,7 @@ table %>%
 
 <br>
 
-### Case status by month for 2019
+#### Case status by month for 2019 {-}
 
 This is to see how quickly nonfatal shootings are suspended. Data was generated Sept 25, 2019 (goes to Aug. 31, 2019). Nearly one-third of the nonfatal shootings from August were already suspended.
 
@@ -862,230 +650,7 @@ shot %>%
 
 <br>
 
-# Factors in Homicide Clearances
-
-<br>
-
-## Demographics, weapon, circumstance
-
-<br>
-
-There is little racial/ethnic disparity in arrest rates for murder when taking into account weapon and circumstance.
-
-The chart below shows the percent of homicides marked as having an arrest in the online data, and as being cleared by arrest or exceptional means in the FOIA data, by race/ethnicity, weapon and circumstance. A race/ethnicity group was removed if there were fewer than 20 incidents in that group to avoid skewing the comparison.
-
-When taking into account weapon and circumstance, there's generally not a significant racial/ethnic disparity in arrests or clearances, with the greatest disparity in favor of whites being for firearm murders with undetermined circumstances (14 percentage points), followed by robbery (10 percentage points).
-
-The overall disparity in arrests and clearances appears to be more a result of the significantly higher proportion of black and Latino victims who are in the "tough to clear" categories of non-family firearm murders, whereas a much higher share of white homicide victims are killed by physical force or other weapons.
-
-```{r hom vic sex and race disparity}
-
-shot %>%
-  filter(crime_ucr == "01A" & year != "2019") %>%
-  mutate(status = ifelse(status %in% c("0-OPEN ASSIGNED", "1-SUSPENDED"), "Open", "Cleared")) %>%
-  group_by(`Race/Ethnicity` = victim_race_group,
-           Circumstance = circ_combined,
-           Weapon = weapon_firearm_ind_inferred) %>%
-  summarise(Total = n_distinct(id_case_number),
-            `% Arrest` = (n_distinct(id_case_number[status_arrest]) / Total) * 100,
-            `% Cleared` = n_distinct(id_case_number[status == "Cleared"]) /
-                          n_distinct(id_case_number[!is.na(status)]) * 100
-            ) %>%
-  group_by(`Race/Ethnicity`) %>%
-  mutate(`% Murders` = Total / sum(Total) * 100) %>%
-  filter(`Race/Ethnicity` != "Other/Unknown") %>%
-  filter(Total >= 20) %>%
-  gather("Measure", "value", Total:`% Murders`) %>%
-  filter(!(Weapon == "Other/Physical Force" & Measure == "% Cleared")) %>%
-  mutate(value = round(value, 0)) %>%
-  spread(`Race/Ethnicity`, value) %>%
-  mutate(`Black - White` = Black - White,
-         `Latino - White` = Latino - White) %>%
-  dt_filter()
-
-```
-
-```{r test on vic gender age circ, eval=FALSE, include=FALSE}
-shot %>%
-  filter(crime_ucr == "01A" & year != "2019" &
-         victim_sex %in% c("M", "F") & !is.na(victim_age_group)) %>%
-  mutate(status = ifelse(status %in% c("0-OPEN ASSIGNED", "1-SUSPENDED"), "Open", "Cleared"),
-         child = ifelse(victim_age_group %in% c("Baby/Toddler", "Child 3 - 14"), "Child", "Adult/Teen")) %>%
-  group_by(`Race/Ethnicity` = victim_race_group,
-           gender = victim_sex,
-           age_group = child,
-           Weapon = weapon_firearm_ind_inferred) %>%
-  summarise(Total = n_distinct(id_case_number),
-            `% Arrest` = n_distinct(id_case_number[status_arrest]) / Total * 100,
-            `% Cleared` = n_distinct(id_case_number[status == "Cleared"]) /
-                          n_distinct(id_case_number[!is.na(status)]) * 100
-           ) %>%
-  group_by(`Race/Ethnicity`) %>%
-  mutate(`% Murders` = (Total/sum(Total))*100) %>%
-  filter(`Race/Ethnicity` != "Other/Unknown") %>%
-  filter(Total >= 20) %>%
-  gather("Measure", "value", Total:`% Murders`) %>%
-  filter(!(Weapon == "Other/Physical Force" & Measure == "% Cleared")) %>%
-  mutate(value = round(value, 0)) %>%
-  spread(`Race/Ethnicity`, value) %>%
-  mutate(`Black - White` = Black - White,
-         `Latino - White` = Latino - White) %>%
-  dt_filter()
-
-count(shot, victim_age_group)
-
-shot %>%
-  filter(crime_ucr == "01A" & year != "2019" &
-           victim_sex %in% c("M", "F") & !is.na(victim_age_group)) %>%
-  mutate(status = ifelse(status %in% c("0-OPEN ASSIGNED", "1-SUSPENDED"), "Open", "Cleared"),
-         child = ifelse(victim_age_group %in% c("Baby/Toddler", "Child 3 - 14"), "Child", "Adult/Teen")) %>%
-  group_by(gender = victim_sex,
-           age_group = child,
-           Weapon = weapon_firearm_ind_inferred,
-           Circumstance = circ_combined) %>%
-  summarise(n=n()) %>%
-  group_by(gender, age_group) %>%
-  mutate(total = sum(n),
-         share_total = n/total) %>%
-  dt_filter() %>%
-  formatPercentage(c("Share Total"), 0)
-
-```
-
-## Time to clear
-
-Of the murders that do get cleared, non-gun murders tend to get cleared much faster.
-
-- Non-firearm cases are over-represented in the first 3 time-to-clear tiles, and about evenly represented in 4th tile, in proportion to their overall share of cases.
-- Nearly 40% of the non-firearm cases that are cleared are cleared within three days, versus just 20% of firearm cases that are cleared.
-- Non-firearm cases are under-represented in the "open" category.
-
-```{r hom time to clear}
-
-# add days to clear field. 60 records don't have y/n cleared
-hom <- shot %>%
-  filter(crime_primary_type == "Homicide" & !is.na(status_cleared)) %>%
-  mutate(days_to_clear = round(as.numeric(difftime(date_cleared, date_occurred, units = "days")),0)) %>%
-  group_by(id_case_number) %>%
-  mutate(n=n_distinct(days_to_clear),
-         # 41 id_case_numbers have two distinct # days to clear. creating a new id so we can do the tiles by unique cases - since homicides are generally investigated and cleared by case, not victim - while still allowing for these particular incidents to fall into different tiles
-         new_id = ifelse(n>1, id, id_case_number)) %>%
-  ungroup()
-
-# hom %>%
-#   group_by(is.na(date_cleared), status_cleared) %>%
-#   summarise(n=n())
-# FALSE	Y	4551		
-# TRUE	N	5213	
-
-# hom %>% filter(days_to_clear<0) %>%
-#   group_by(days_to_clear) %>%
-#   summarise(n=n())
-# -6	1			
-# -2	1			
-# -1	7	
-
-# hom %>% group_by(id_case_number) %>%
-#   mutate(n=n_distinct(days_to_clear)) %>%
-#   filter(n>1) %>%
-#   group_by(id_case_number) %>%
-#   summarise(min = min(days_to_clear),
-#             max = max(days_to_clear)) %>%
-#   mutate(diff = max-min) %>%
-#   arrange(-diff)
-# 41 have a difference, most only a day or two but many may be in different deciles
-
-# hom %>% 
-#   summarise(new = n_distinct(new_id),
-#             old = n_distinct(id_case_number),
-#             n = n())
-
-hom <- hom %>%
-  # filtering NA date cleared
-  filter(!is.na(date_cleared) & days_to_clear >= 0) %>%
-  select(new_id, days_to_clear) %>%
-  unique() %>%
-  mutate(tile = ntile(days_to_clear, 4)) %>%
-  select(new_id, tile) %>%
-  right_join(hom, by = c("new_id"))
-
-```
-
-```{r tile days}
-
-tile_days <- function(table) {
-table <-  table %>%
-    group_by(tile) %>%
-    summarise(n = n_distinct(new_id),
-              min_days = min(days_to_clear),
-              max_days = max(days_to_clear), 
-              n_firearm = n_distinct(new_id[which(weapon_firearm_ind_inferred=="Firearm")]),
-              n_other = n_distinct(new_id[which(weapon_firearm_ind_inferred!="Firearm")])) %>%
-  
-  mutate(tile = as.character(tile),
-         tile = ifelse(is.na(tile), "Open", tile))
-
-table %>%
-  summarise(n_firearm = sum(n_firearm),
-            n_other = sum(n_other)) %>%
-  mutate(tile = "Total",
-         n = n_firearm + n_other) %>%
-  bind_rows(table) %>%
-  select(tile, everything()) %>%
-  mutate(share_firearm = n_firearm/n, 
-         share_other = n_other/n,
-         share_of_cleared_firearm = ifelse(
-           !tile %in% c("Open", "Total"), 
-           (n_firearm/(sum(n_firearm[which(!tile %in% c("Open", "Total"))]))), as.numeric(NA)),
-         share_of_cleared_other = ifelse(
-           !tile %in% c("Open", "Total"), 
-           (n_other/(sum(n_other[which(!tile %in% c("Open", "Total"))]))), as.numeric(NA))) %>%
-  dt_simple_long() %>%
-  formatPercentage(c("Share Firearm", "Share Other", "Share Of Cleared Firearm", "Share Of Cleared Other"),0)
-
-}
-
-```
-
-```{r tile year}
-
-hom %>% tile_days()
-  
-```
-
-**Time to clear for gun cases by year**
-
-There's no trend in time-to-clear for firearm murders that looks significant enough to explain a 40-percentage-point drop in clearances for gun murders over this same time period.
-
-```{r tile by year}
-
-hom %>%
-  # filtering NA date cleared, cases cleared within a year
-  filter(!is.na(date_cleared) & days_to_clear >= 0 & days_to_clear <  365 & year < 2018 &
-           weapon_firearm_ind_inferred == "Firearm") %>%
-  select(new_id, year, days_to_clear) %>%
-  mutate(year = as.character(year)) %>%
-  unique() %>%
-  ggplot(aes(year, days_to_clear)) +
-  geom_boxplot(varwidth=T)
-  
-```
-
-```{r diff gun non-gun by year}
-
-hom %>%
-  # filtering NA date cleared, cases cleared within a year
-  filter(!is.na(date_cleared) & days_to_clear >= 0 & days_to_clear <  365 & year < 2018) %>%
-  select(firearm_yn = weapon_firearm_ind_inferred,
-         new_id, year, days_to_clear) %>%
-  mutate(year = as.character(year)) %>%
-  unique() %>%
-  ggplot(aes(year, days_to_clear, fill = firearm_yn)) +
-  geom_boxplot()
-  
-```
-
-## Watch, detective area
+## Watch, Detective area
 
 This is to see whether there has been a big drop in shootings by shift and detective area. 
 
@@ -1123,26 +688,22 @@ shot %>%
 
 ``` 
 
-#### Homicides only {-}
-
-```{r watch charts}
-shot %>%
-  filter(shot_cat %in% c("Fatal Shooting", "Other Homicide")) %>%
-  watch_stats() %>%
-  watch_charts() +
-  ggtitle("Detective Area and Watch Shifts (detail), Homicides Only")
-```
 <br>
 
 #### Fatal shootings only {-}
 
-Consolidating watch overlap into start of watch. Fatal shootings only, since those are the homicides that have seen a big decline.
+Consolidating watch overlap into start of watch. Fatal shootings only, since those are the homicides that have seen a big decline in clearances/ arrests.
 
 - All watch shifts and areas have seen a significant decline in arrest rate. It's interesting that the trend in decline is so even between the areas. 
 - 1st Watch in South Area has the lowest rate of arrest in 2018 (8% of fatal shootings).
 - 1st Watch has the most fatal shootings, and the biggest drop in the total number of arrests. This could be putting a bigger drag on the city's overall arrest rate.
 
-```{r watch consolidate}
+**From story:**
+
+> The Trace found that the arrest rate for fatal shootings that took place during the midnight shift in what is now Area South was down from 64 percent in 2001 to 8 percent in 2018. The rate for the other two areas has declined, but not as much: In 2018, it was 30 percent in Area North, and 27 percent in Area Central.
+
+
+```{r watch consolidate, fig.width=10, fig.height=8}
 
 shot %>%
   mutate(detective_watch = case_when(detective_watch == "1st and 3rd Watch overlap" ~ "1st Watch",
@@ -1173,9 +734,9 @@ shot %>%
 
 ```
 
-#### Nonfatal shootings {-}
+#### Nonfatal shootings only {-}
 
-```{r watch area nfs}
+```{r watch area nfs, fig.width=10, fig.height=8}
 
 shot %>%
   mutate(detective_watch = case_when(detective_watch == "1st and 3rd Watch overlap" ~ "1st Watch",
@@ -1185,13 +746,33 @@ shot %>%
   filter(shot_cat %in% c("Nonfatal Shooting")) %>%
   watch_stats() %>%
   watch_charts() +
-  ggtitle("Detective Area and Watch Shifts (consolidated into start of shift), Fatal Shootings Only")
+  ggtitle("Detective Area and Watch Shifts (consolidated into start of shift), Nonfatal Shootings Only")
 
 ```
 
+<br>
+
+#### Additional stat checks for story {-}
+
+Most shootings occur during the midnight shift:
+
+> Area South, where *nearly 9 out of 10 residents are black or Latino,* is the only area without any designated homicide detectives on the midnight shift, **when most shootings occur,** the report said. 
+
+- Area South was 87% black and Hispanic in 2018.
+- Midnight shift ranked #1 most shootings 16 out of 19 years.
+
 ```{r watch fact check}
 
-# first watch ranked #1 most shootings 16 out of 19 times
+districts %>%
+  filter(!location_police_district %in% c("099", "031") &
+           year == 2018) %>%
+  group_by(location_area) %>%
+  summarise(dist_blk_hisp = round((sum(dist_blk_hisp)),0),
+            dist_total = round((sum(dist_total)),0)) %>%
+  mutate(pct_blk_hisp = dist_blk_hisp/dist_total) %>%
+  dt_bare() %>%
+  formatPercentage(c("Pct Blk Hisp"),0)
+
 shot %>%
   mutate(detective_watch = case_when(detective_watch == "1st and 3rd Watch overlap" ~ "1st Watch",
                            detective_watch == "2nd and 3rd Watch overlap" ~ "3rd Watch",
@@ -1207,7 +788,12 @@ shot %>%
   summarise(n=n()) %>%
   spread(rank, n)
 
-# south ranked #1 only 6 out of 19 years
+```
+
+Area South ranked #1 most shootings 6 out of 19 years.
+
+```{r area where most occur}
+
 shot %>%
   filter(shot_cat %in% c("Nonfatal Shooting", "Fatal Shooting")) %>%
   group_by(year, location_area) %>%
@@ -1218,166 +804,35 @@ shot %>%
   summarise(n=n()) %>%
   spread(rank, n)
 
-shot %>%
-  filter(shot_cat %in% c("Nonfatal Shooting", "Fatal Shooting")) %>%
-  group_by(year, location_area) %>%
-  summarise(total=n_distinct(id_case_number)) %>%
-  group_by(year) %>%
-  mutate(rank = rank(-total)) %>%
-  filter(rank == 1)
-
-
 ```
 
 <br>
 
-## Correlation Plot
-
-This correlation plot also seems to indicate that the victim's race/ethnicity is a weak predictor of whether a case will be cleared. The strongest predictors were:
-
-- If the circumstance of the murder was related to romantic or family violence, positive predictor of cleared-arrest and cleared-ex (murder-suicides are more common).
-- If the circumstance was unknown, negative predictor of arrest. 
-- The year: The higher the year, the lower the chance of arrest. Some of this could be attributed to the lag time in solving murders. 
-- The weapon (negative predictor of firearm if used, positive if other weapon).
-- The victim's race being white is a predictor that a firearm wasn't used in the murder; the victim's race being black is a predictor that a firearm was used.
-
-```{r corr analysis}
-
-hom_lm <- shot %>%
-  filter(crime_primary_type == "Homicide" & 
-           weapon_firearm_ind_inferred != "Unspecified" & 
-           !is.na(victim_race) & 
-           # only 2013 - 2019 since we're using district demographic stats
-           year >= 2013 & year < 2019) %>%
-  
-  # convert factors to logical for lm
-  mutate(victim_black = ifelse(victim_race_group == "Black", TRUE, FALSE),
-         victim_white = ifelse(victim_race_group == "White", TRUE, FALSE),
-         victim_latino = ifelse(victim_race_group == "Latino", TRUE, FALSE),
-         victim_child = ifelse(victim_age_group %in% c("Baby/Toddler", "Child 3 - 14"), TRUE, FALSE),
-         victim_female = ifelse(victim_sex == "F", TRUE, FALSE),
-         
-         firearm = ifelse(weapon_firearm_ind_inferred == "Firearm", TRUE, FALSE),
-         circ_domestic = ifelse(
-           circ_domestic | victim_type_inferred == "Domestic" | 
-             victim_rel_cat_inferred %in% c("Other Family", "Romantic"),
-           TRUE, FALSE),
-         circ_drug_gang = ifelse(circ_death_cause_group == "Drugs/Gang", TRUE, FALSE),
-         circ_undetermined = ifelse(circ_death_cause_group == "Null/Undetermined" |
-                                      (victim_rel_cat_inferred == "Null/Unknown" & circ_death_cause_category == "OTHER") |
-                                      is.na(victim_rel_cat_inferred),
-                                    TRUE, FALSE),
-         area_central = ifelse(location_area == "Central", TRUE, FALSE),
-         area_north = ifelse(location_area == "North", TRUE, FALSE),
-         area_south = ifelse(location_area == "South", TRUE, FALSE),
-         
-         year = as.character(year)) %>%
-  
-  mutate() %>%
-  left_join(districts, by = c("location_police_district", "year")) %>%
-  mutate(year = as.numeric(year)) %>%
-  select(id_case_number,
-         status_arrest,
-         
-         victim_black,
-         victim_white,
-         victim_latino,
-         victim_child,
-         victim_female,
-         
-         firearm,
-         circ_domestic,
-         circ_drug_gang,
-         circ_undetermined,
-         
-         year,
-         
-         district = location_police_district,
-         firearm,
-         dist_percent_poverty, 
-         dist_percent_blk, 
-         dist_percent_white,
-         
-         area_central,
-         area_north,
-         area_south) %>%
-  unique()
-hom_lm <- as.data.frame(hom_lm)   
-
-```
-
-In this model, the darker the color, the stronger the relationship between the two intercepting variables. Red indicates a positive predictor, so "weapon - firearm" is the strongest positive predictor that arrest will be "FALSE", and the strongest negative predictor that arrest will be "TRUE". We initially included the police district's rate of poverty, but removed it because the relationship didn't appear significant.
-
-```{r hom lm corr plot, eval=FALSE, fig.height=10, fig.width=10, include=FALSE}
-
-plot_correlation(na.omit(
-  (hom_lm %>%
-     select(-c(dist_percent_poverty, dist_percent_blk, dist_percent_white)))), maxcat = 6L)
-
-```
-
-<br>
-
-## Linear Models
-
-In these models, the asterisks indicate that the variable is significant as a predictor. The further the "t value" from 0, in either direction, the stronger the predictor, with positive values being a positive predictor and negative values being a negative predictor.
-
-The "call" at the top of the results shows the variables entered into the model.
-
-**Circumstance, weapon and year are the strongest predictors of outcome in a homicide case:**
-
-```{r lm hom1, echo=FALSE}
-
-summary((lm(status_arrest ~ 
-              victim_black + victim_white + victim_child + victim_female + 
-              firearm + circ_domestic + circ_drug_gang + circ_undetermined + 
-              + dist_percent_poverty + dist_percent_blk + area_south + area_north, 
-            data = hom_lm)))
-```
-
-**The district's share of residents who are black is significant, but not nearly as significant as whether the murder was committed with a firearm.**
-
-```{r hom lm2, echo=FALSE}
-summary((lm(status_arrest ~ firearm + dist_percent_blk, data = hom_lm)))
-```
-
-**When looking at race/ethnicity alone, the victim not being black or Latino is a negative predictor of arrest, but the R-value is very low.**
-
-```{r hom lm 3, echo=FALSE}
-summary((lm(status_arrest ~ victim_black + victim_latino + victim_white, data = hom_lm)))
-```
-
-**But adding either firearm or circumstance lessens the significance of the victim's race.**
-
-```{r race plus another variable}
-summary((lm(status_arrest ~ victim_black + victim_white + firearm, data = hom_lm)))
-summary((lm(status_arrest ~ victim_black + victim_white + firearm + circ_domestic, data = hom_lm)))
-summary((lm(status_arrest ~ victim_black + victim_white + circ_domestic, data = hom_lm)))
-```
-
-<br>
 <br>
 
 # Over-Policing, Under-Policing
 
-More than one-third of the arrests made by the Chicago PD from 2001 through Aug 2019 were for narcotics --- mostly buying, attempting to buy, or possessing marijuana and other hard drugs --- 720,000 arrests in total.  During that time period, Police made another 98,000 arrests for "quality of life" offenses such as prostitution, gambling, and underage drinking.
+More than one-third of the arrests made by the Chicago PD from 2001 through Aug 2019 were for narcotics. Meanwhile, police failed to make arrests in a half-million murders, rapes, robberies and serious assaults, and another 1.1 million less serious violent crimes and sex offenses.
 
-Meanwhile, police failed to make arrests in a half-million murders, rapes, robberies and serious assaults, and another 1.1 million less serious violent crimes and sex offenses.
-
-99% of all drug and alcohol reports resulted in arrests, indicating that these are largely proactive arrests. That doesn't mean that police aren't responding to general complaints of drug activity in a neighborhood; just that the arrests are largely the result of crimes the officers witness first-hand from proactive activities like patrols, pat-downs, surveillance, or undercover activity, versus an investigation into a specific crime report. 
+Nearly 100% of all drug and alcohol reports resulted in arrests, indicating that these are largely proactive arrests. That doesn't mean that police aren't responding to general complaints of drug activity in a neighborhood; just that the arrests are largely the result of crimes the officers witness first-hand from proactive activities like patrols, pat-downs, surveillance, or undercover activity, versus an investigation into a specific crime report. 
 
 Meanwhile, only 14% of the reports of violent crimes, property crimes, and threats and harassment resulted in arrest, leaving 4.9 million reports without arrest.
 
 **Caveats**
 
-- Count is by case number, so a homicide with multiple victims would be counted as one case, sames as the other incident types.
-- We don't know how many of the "arrests" include incidents that the FBI would consider open, exceptionally cleared or partially cleared, since we only have detailed status information for shootings starting in 2010.
+- Counts are by unique case number, not by victim, since the online data only enables a victim count for homicides.
+- Counts use online arrest flag, since we have that information for every crime type.
+- Incidents are categorized based on their IUCR descriptions in CPD’s incident reporting guide, and for shootings, the homicide and nonfatal shooting data that we received via FOIA.
 
+<br>
 
-```{r crime arrest report}
+## Arrest/No Arrest Counts
+
+```{r arrests large, echo=FALSE}
+
+# create arrest report function 
 
 arrest_report <- function(table) {
-  
   table %>%
     summarise(`Group Arrests` = n_distinct(id_case_number[status_arrest]),
               `Group No Arrest` = n_distinct(id_case_number[!status_arrest]),
@@ -1387,19 +842,8 @@ arrest_report <- function(table) {
     select(-c(all_arrests)) %>%
     dt_no_filter() %>%
     formatPercentage(c("Group % All Arrests", "Group % Arrest"), 0)
-
 }
-```
 
-<br>
-
-## Arrest/No Arrest Counts
-
-<br>
-
-#### Counts by crime type: {-}
-
-```{r arrests large, echo=FALSE}
 crime %>%
   mutate(all_arrests = n_distinct(id[status_arrest])) %>%
   group_by(crime_group = crime_group_large_inferred, all_arrests) %>% 
@@ -1407,18 +851,24 @@ crime %>%
 
 ```
 
+#### Story stat check {-}
+
+>Chicago Police have failed to make an arrest in 85 percent of the violent crimes committed with firearms that have taken place in the city since 2001: Nearly 42,000 shootings that resulted in an injury or fatality, and another 134,000 rapes, robberies, and assaults at gunpoint. 
+
+>During the same nearly 20-year period, police data shows 610,000 arrests for charges of possessing or purchasing marijuana and other illegal drugs. That amounts to one-third of all arrests. 
+
+
 ```{r story stat check}
 
 crime %>%
-  mutate(category = case_when(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") ~ shot_cat,
-                         crime_group_large_inferred == "Part I Violent" ~ crime_group_inferred,
-                         crime_group_large_inferred == "Narcotics" ~ crime_group_inferred,
-                         TRUE ~ "Other"),
-         status_arrest = ifelse(status_arrest, "Arrest", "No Arrest")) %>%
-  group_by(category, weapon = weapon_firearm_ind_inferred, status_arrest) %>%
-  summarise(n = n_distinct(id_case_number)) %>%
-  spread(status_arrest, n) %>%
-  write_csv("temp.csv")
+  mutate(category = case_when(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") ~ "Shooting",
+                              crime_group_large_inferred == "Part I Violent" & 
+                                weapon_firearm_ind_inferred == "Firearm" ~ "Other Part I Gun",
+                              crime_group_large_inferred == "Narcotics" ~ crime_group_inferred,
+                              TRUE ~ "Other"),
+         all_arrests = n_distinct(id[status_arrest])) %>%
+  group_by(category, all_arrests) %>% 
+  arrest_report()
   
 ```
 
@@ -1432,6 +882,7 @@ crime %>%
          crime_group = paste(crime_group_large_inferred, crime_group_inferred, sep = " - ")) %>%
   group_by(crime_group, all_arrests) %>% 
   arrest_report()
+
 ```
 
 <br>
@@ -1530,7 +981,8 @@ crime %>%
                                                                      "Other Offense") ~ "Other",
                                  crime_group_large_inferred %in% c("Public Peace", "Quality of Life") ~
                                    "Public Peace, Quality of Life",
-                                 TRUE ~ crime_group_large_inferred)) %>%
+                                 TRUE ~ crime_group_large_inferred),
+         status_arrest = ifelse(status_arrest, "Arrest", "No Arrest")) %>%
   left_join(districts, by = c("location_police_district", "year")) %>%
   filter(!is.na(dist_bucket_per_blk_hisp)) %>%
   rename(`District % Black or Latino` = dist_bucket_per_blk_hisp) %>%
@@ -1595,7 +1047,8 @@ arrest_bucket_year %>%
     size = 3.5, position=position_stack(0.5)) + 
   labs(x="% Police District Black and Latino", y = "% of All Arrests") +
   theme(panel.border=element_blank(), axis.line=element_line()) +
-  theme(legend.position="top", legend.title=element_blank()) 
+  theme(legend.position="top", legend.title=element_blank()) +
+  ggtitle("Crime Reports With Arrest, by Year and District % Black, Latino")
 ```
 
 <br>
@@ -1613,7 +1066,8 @@ arrest_bucket_year %>%
     size = 3.5, position=position_stack(0.5)) + 
   labs(x="% Police District Black and Latino", y = "% of All Arrests") +
   theme(panel.border=element_blank(), axis.line=element_line()) +
-  theme(legend.position="top", legend.title=element_blank()) 
+  theme(legend.position="top", legend.title=element_blank()) +
+  ggtitle("Crime Reports Without Arrest, by Year and District % Black, Latino")
 ```
 
 <br>
@@ -1649,327 +1103,8 @@ districts %>%
 
 ```
 
-```{r blk latino by area}
-
-districts %>%
-  filter(!location_police_district %in% c("099", "031") &
-           year == 2018) %>%
-  group_by(location_area, `% Black and Latino` = dist_bucket_per_blk_hisp) %>%
-  summarise(n_district = n_distinct(location_police_district)) %>%
-  spread(location_area, n_district)
-
-districts %>%
-  filter(year == 2018) %>%
-  group_by(location_area) %>%
-  summarise(dist_blk_hisp = sum(dist_blk_hisp),
-            dist_total = sum(dist_total)) %>%
-  mutate(pct_blk_hisp = dist_blk_hisp/dist_total)
-  
-```
 
 <br>  
-
-<br>
-  
-## Predictors of violent crime and drug arrest rates
-
-This section looks at the relationships between a police district's arrest rate for violent crimes and for drugs; violent crime rate; poverty level; and racial demographics. There is one observation per year per police district.
-
-- DOJ commenced its investigation on Dec. 7, 2015
-
-<br>
-
-```{r op_up_table pct}
-
-op_up <- crime %>%
-  mutate(year = as.character(year)) %>%
-  # total incidents for the year
-  group_by(year, location_police_district) %>%
-  summarise(total_incidents = n_distinct(id_case_number),
-            total_arrests = n_distinct(id_case_number[status_arrest]),
-            
-            # shootings
-            shootings_total = n_distinct(id_case_number[shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")]),
-            shootings_total_noarrest = n_distinct(id_case_number[shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") & !status_arrest]),
-            
-            # Part I Violents
-            violent_total = n_distinct(id_case_number[crime_group_large_inferred == "Part I Violent"]),
-            violent_total_noarrest = n_distinct(id_case_number[crime_group_large_inferred == "Part I Violent" & !status_arrest]),
-            
-            # drug and quality of life arrests
-            drug_arrests = n_distinct(id_case_number[crime_group_inferred == "Narcotics - Possession, Purchase" & status_arrest]),
-            mj_para_alc_arrests = n_distinct(id_case_number[drug_crime_class_inferred == "Possession, Purchase" & 
-                                                               drug_type_inferred %in% c("Alcohol", "Marijuana", "Para/Synthetic/Fake") & 
-                                                               status_arrest]),
-            
-            drug_sale_arrests = n_distinct(id_case_number[crime_group_inferred == "Narcotics - Manufacture, Sell, Deliver" & status_arrest]),
-            
-            weapon_violation_arrests = n_distinct(id_case_number[crime_group_inferred == "Weapon Violation" & status_arrest])) %>%
-  
-  replace(., is.na(.), 0) %>% 
-  filter(!location_police_district %in% c("000", "021", "031", "0"))
-
-# add summaries for citywide and year
-op_up <- op_up %>%
-  bind_rows(
-    (op_up %>%
-       group_by(year) %>%
-       summarise_if(is.numeric, sum) %>%
-       mutate(location_police_district = "099"))
-    )
-
-op_up <- op_up %>%
-  bind_rows((op_up %>%
-       group_by(location_police_district) %>%
-       summarise_if(is.numeric, sum) %>%
-       mutate(year = "All Years")
-       )) %>%
-  filter(!is.na(location_police_district)) %>%
-  
-  left_join(districts, by = c("year", "location_police_district")) %>%
-  
-  mutate(
-    shootings_share_noarrest = round((shootings_total_noarrest/shootings_total), digits = 2),
-    violent_share_noarrest = round((violent_total_noarrest/violent_total), digits = 2),
-    
-
-    drug_arrest_share_allarrest = round((drug_arrests/total_arrests), digits = 2),
-    mj_para_alc_arrests_share_allarrest = round((mj_para_alc_arrests/total_arrests), digits = 2),
-    
-    drug_per_100 = round(drug_arrests/(dist_total/100), digits = 2),
-    mj_para_alc_per_100 = round(mj_para_alc_arrests/(dist_total/100), digits = 2),
-    
-    open_shooting_per_100 = round(shootings_total_noarrest/(dist_total/100), digits = 2),
-    open_violent_crimes_per_100 = round(violent_total_noarrest/(dist_total/100), digits = 2),
-    
-    
-    drug_poss_sale_arrests = drug_arrests + drug_sale_arrests,
-    drug_poss_sale_per_100 = round(drug_poss_sale_arrests/(dist_total/100), digits = 2),
-    drug_sale_per_100 = round(drug_sale_arrests/(dist_total/100), digits = 2),
-    
-    weapon_violation_per_100 = round(weapon_violation_arrests/(dist_total/100), digits = 2)) %>%
-  
-  select(sort(current_vars())) %>%
-  select(location_police_district, location_police_district_name, year, everything()) %>%
-  unique() 
-  
-op_up %>% write_csv("Output/summary_tables/arrest_rates_police_district.csv")
-
-```
-
-```{r op up lm table}
-
-op_up_fit <- op_up %>%
-  # getting rid of grouping variables
-   as.data.frame() %>%
-    # remove the aggregate "all years" (which would be coerced into an NA by converting year to intiger), years prior to 2013 due to changes in district shapes, 2019 because it's a partial year, and the citywide aggregate ("099")
-  mutate(year = as.numeric(year)) %>%
-  filter(year >= 2013 & !is.na(year) & 
-           location_police_district != "099"# &
-          # shootings_total >= 20
-         ) %>%
- 
-
-  mutate(`Violent Per 100` = violent_total/(dist_total/100),
-         `Shootings Per 100` = shootings_total/(dist_total/100),
-         `% Shooting Arrest` = (1 - shootings_share_noarrest),
-         `% Violent Arrest` = (1 - violent_share_noarrest),
-         year = as.integer(year)) %>%
-  select(
-    Year = year,
-    location_police_district,
-    
-    `# Violent No Arrest Per 100` = open_violent_crimes_per_100, 
-    `% Violent No Arrest` = violent_share_noarrest, 
-    `% Violent Arrest`,
-    `Violent Per 100`,
-    
-    `% Shooting No Arrest` = shootings_share_noarrest,
-    `% Shooting Arrest`,
-    `Shootings Per 100`,
-    
-    `% All Arrests Drug Poss, Buy` = drug_arrest_share_allarrest, 
-    `Drug Poss, Buy Arrests Per 100` = drug_per_100, 
-    
-    `% All Arrests MJ, Para, Alc` = mj_para_alc_arrests_share_allarrest,
-    `MJ, Para, Alc Arrests Per 100` = mj_para_alc_per_100,
-    
-    `% Poverty` = dist_percent_poverty, 
-    `% Earning $100K+ in 2010` = dist_percent_100Kplus, 
-    `% White` = dist_percent_white,
-    `% Latino` = dist_percent_hisp,
-    `% Black` = dist_percent_blk)
-
-```
-
-<br>
-
-### Correlation plot
-
-**Violent crime and shooting arrest rates:**
-
-- The only positive predictor of the arrest rate for shootings is the share of the police district that is white. 
-- The district's poverty rate, share of residents that were black, and rate of shootings per 100 people were all negative predictors. The share of arrests in that district that were for drug possession and purchase was a less strong negative predictor. 
-- The relationships were similar, but stronger, for the arrest rate for *all* violent crimes.
-  
-**Drug arrest rates:**
-
-- The strongest indicators were found when switching the drug arrest measures to dependent variables (effect), versus independent variables (cause). A police district's rates of shootings and other violent crimes were very strong predictors of the district's rate and share of arrests that were for purchasing and possessing drugs. This suggests that police are making these types of arrests as a response to violent crime.
-- The variables "MJ, Para, Alc Arrests Per 100" and "% All Arrests MJ, Para, Alc" are similar to the variables "% All Arrests Drug Poss, Buy" and "Drug Poss, Buy Arrests Per 100", but hard drugs are removed from the calculations, and alcohol violations related to use (not sale) are added. 
-- "MJ, Para, Alc Arrests Per 100" has the strongest relationships with the share of the police district that is black and in poverty (positive), and white (negative), in comparison to the other three drug measures. The share of the police district that is Latino is a negative predictor.
-    
-**Year**
-
-Year, as an integer, is a negative predictor of all arrest rates.
-    
-**Other notes:**
-
-- % Latino tends to have similar trends as % White, although less strong. 
-- In general, the marijuana, paraphernalia, and alcohol arrest *rates* are a stronger predictor than the *share* of arrests that were those offenses.
-
-```{r plot corr, fig.height=9, fig.width=9}
-
-plot_correlation(
-  (op_up_fit %>%
-     select(-c(`# Violent No Arrest Per 100`, `% Violent No Arrest`, 
-               `% Shooting No Arrest`, `% Earning $100K+ in 2010`))))
-
-```
-
-```{r measure correlation grid}
-
-# create fuction to make scatter plot matrix
-
-xy_table <- function(table) {
-  
-table %>%
-  filter(variable == "x_measure") %>%
-  select(location_police_district, Year,
-         x_value = value,
-         x_measure = measure) %>%
-  inner_join(
-    (table %>%
-       filter(variable == "y_measure") %>%
-  select(location_police_district, Year,
-         y_value = value,
-         y_measure = measure)),
-  by = c("location_police_district", "Year")
-  ) %>%
-    
-  ggplot(aes(x = x_value, y = y_value,  colour = Year), 
-         colour="black", shape=21, size = 1, alpha=.8) +
-  facet_grid(rows=vars(y_measure), cols=vars(x_measure), 
-             labeller = label_wrap_gen(width = 25, multi_line = TRUE), 
-             scales = "free") +
-  geom_point(size = 2) +
-  geom_smooth(colour="black", size=.5, linetype = "dashed", method = "lm") +
-  theme_bw() +
-  theme(legend.position="bottom") 
-  
-}
-
-```
-
-### Arrest rate for shootings
-
-- The strongest variables are year (negative predictor) and percent of the district that is white.
-- % All Arrests Drug Poss, Buy", on its own, has a negative effect on the shooting arrest rate, but the R value is weak.
-
-```{r percent shootig arrest scatter, fig.width=10, fig.height=3.5}
-
-table <- op_up_fit %>%
-  gather("measure", "value", `# Violent No Arrest Per 100`:`% Black`) %>%
-  mutate(variable = case_when(measure %in% c("% All Arrests Drug Poss, Buy", "Shootings Per 100",  
-                                                 "% White", "% Black", "% Poverty") ~ "x_measure",
-                                  measure == "% Shooting Arrest" ~ "y_measure",
-                                  TRUE ~ "Other"))
-table %>%
-  xy_table() +
-  ylim(0,.75)
-
-```
-
-**This is the strongest group of predictors I found for violent crime arrests:**
-
-```{r shooting mix, echo=FALSE}
-
-summary((lm(`% Shooting Arrest` ~ `% All Arrests Drug Poss, Buy` + 
-              `Shootings Per 100` + `Year` + 
-              `% White` + `% Black` + `% Poverty`,
-            data = op_up_fit)))
-```
-
-
-**"% All Arrests Drug Poss, Buy" on its own, has a negative effect on both shooting and violent crime arrests, but the R value is weak.**
-
-```{r shooting drug poss}
-
-summary((lm(`% Shooting Arrest` ~ `% All Arrests Drug Poss, Buy`, data = op_up_fit)))
-
-```
-
-<br>
-
-### Arrest rate for drugs
-
-- The correlations are a lot stronger when looking at drug arrest rates as a dependent variable.
-- The shooting and violent crimes rates are very strong predictors of drug arrest rates.
-- So is the share of the district that is black, and the share of the district that is in poverty --- but it appears that the violent crime rate and shooting rate explain most of that variation.
-
-```{r scatter matrix drug, echo=FALSE, fig.height=5.5, fig.width=10}
-
-table <- op_up_fit %>%
-  gather("measure", "value", `# Violent No Arrest Per 100`:`% Black`) %>%
-  mutate(variable = case_when(measure %in% c("Shootings Per 100", "Violent Per 100",
-                                             "% White", "% Black", "% Poverty") ~ "x_measure",
-                              measure %in% c("% All Arrests Drug Poss, Buy", "Drug Poss, Buy Arrests Per 100")
-                                             ~ "y_measure",
-                              TRUE ~ "Other"))
-table %>%
-  xy_table()
-
-```
-
-**The shooting and violent crimes rates are very strong predictors of drug arrest rates.**
-
-```{r violent mix}
-
-summary((lm(`Drug Poss, Buy Arrests Per 100` ~ `Shootings Per 100`, data = op_up_fit)))
-
-summary((lm(`Drug Poss, Buy Arrests Per 100` ~ `Violent Per 100`, data = op_up_fit)))
-
-```
-
-<br>
-
-**The percent of a district that is black, on its own, is a strong predictor of the drug arrest rate.**
-
-```{r lm drug arrests race poverty violent crime}
-
-summary((lm(`Drug Poss, Buy Arrests Per 100` ~ `% Black`, data = op_up_fit)))
-
-```
-
-<br>
-
-**But that significance disappears when factoring in the district's violent crime rate.**
-
-```{r lm drug race less w violent}
-
-summary((lm(`Drug Poss, Buy Arrests Per 100` ~ `Violent Per 100` + 
-          `% Black`, data = op_up_fit)))
-
-```
-
-<br>
-
-**Summary table**
-
-```{r op up table, echo=FALSE}
-op_up %>% dt_filter()
-```
-
-<br>
 
 <br>
 
@@ -2042,8 +1177,7 @@ staff %>%
        mutate(share_arrest = arrest/total)),
     by = "year") %>%
   filter(year >= 2001) %>%
-  filter(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) %>%
-  write_csv("line_chart.csv")
+  filter(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) 
 
 
 ```
@@ -2266,7 +1400,7 @@ dt_filter(staff)
 
 # 11th District
 
-This section gives detail on the 11th District, which will be featured in the story. The district was not altered during the time-period covered by our data, so we can use district-specific stats, just not comparison stats.
+This section gives detail on the 11th District. The district was not altered during the time-period covered by our data, so we can use district-specific statistics for all years (just not  statistics comparing it with other districts).
 
 District stats:
 
@@ -2294,17 +1428,17 @@ shot %>%
   group_by(status_arrest, year, shot_cat) %>%
   summarise(n=n()) %>%
   spread(status_arrest, n) %>%
-  mutate(arrest_rate = `TRUE`/(`TRUE`+`FALSE`)) %>%
-  rename(number_arrests = `TRUE`) %>%
+  mutate(`Arrest Rate` = `TRUE`/(`TRUE`+`FALSE`)) %>%
+  rename(`# of Arrests` = `TRUE`) %>%
   select(-`FALSE`) %>%
-  gather("measure", "value", number_arrests:arrest_rate) %>%
+  gather("measure", "value", `# of Arrests`:`Arrest Rate`) %>%
   ggplot() +
   geom_line(aes(y=value, x = year, colour = shot_cat), size = 1) + 
   geom_point(aes(y=value, x = year, colour = shot_cat), size = 1) + 
   facet_wrap(measure ~ shot_cat, scales = "free_y", nrow = 2) +
-  #geom_text(aes(y=value, x = year)) +
-  theme(legend.position="bottom") 
-
+  theme(legend.position="top")  +
+  ggtitle("Number of Arrests and Arrest Rate for Fatal and Nonfatal Shootings, 11th District")
+  
 ```
 
 <br>
@@ -2336,51 +1470,6 @@ shot %>%
 
 ```
 
-#### Stats for just 2019 {-}
-
-```{r stats for 2019}
-
-crime %>% 
-  filter(location_police_district == "011" &
-           year == 2019 &
-    shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting", "Firearm - Discharge Unspecified")) %>%
-  left_join(
-    (online %>%
-       select(id,
-              arrest_online = Arrest)),
-    by = "id") %>%
-  group_by(shot_cat) %>%
-  summarise(total = n_distinct(id_case_number),
-            total_arrest = n_distinct(id_case_number[which(status_arrest)]),
-            total_noarrest = n_distinct(id_case_number[which(!status_arrest)]),
-            total_online = n_distinct(id_case_number),
-            total_arrest_online = n_distinct(id_case_number[which(arrest_online)]),
-            total_noarrest_online = n_distinct(id_case_number[which(!arrest_online)]),
-            ) %>%
-  dt_bare()
-
-
-# crime group and share of all crimes
-crime %>% 
-  filter(location_police_district == "011" &
-           year == 2019 & status_arrest) %>%
-  group_by(crime_group_inferred) %>%
-  summarise(n = n_distinct(id_case_number)) %>%
-  arrange(-n) %>%
-  
-  adorn_one_col()
-
-online %>% count(nchar(ID))
-
-
-crime %>% 
-  filter(location_police_district == "011" &
-           year == 2019 &
-    shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) %>%
-  group_by(shot_cat, status) %>%
-  summarise(n = n_distinct(id_case_number))
-
-```
 
 <br>
 
@@ -2423,21 +1512,21 @@ crime %>%
 
 ```
 
+<br>
+
+## Comparison of arrest distribution
+
+In the 11th District, drug charges have consistently made up a much larger share of overall arrests, and violent crimes a much lower share, in comparison to other districts in the city.
+
+However, the shares of total arrests that were for drug sales (versus possession and purchase) and weapons violations have gone up in the 11th District. The share of arrests that were for property crimes, and drug possession and purchase, has gone down.
+
 ```{r arrest dist chart}
 
-arrest_dist <- crime %>%
+#arrest_dist <- 
+  crime %>%
   filter(year >= 2013) %>%
-  mutate(crime_group = case_when(crime_group_inferred == "Narcotics - Manufacture, Sell, Deliver" ~
-                                   "Narcotics - Manufacture, Sell, Deliver",
-                                 crime_group_inferred == "Narcotics - Possession, Purchase" ~
-                                   "Narcotics - Possession, Purchase",
-                                 crime_group_large_inferred %in% c("Part II Property",
-                                                                   "Part I Property") ~ "Property",
-                                 crime_group_large_inferred %in% c("Threats and Harassment",
-                                                                   "Other Offense") ~ "Other",
-                                 crime_group_large_inferred %in% c("Public Peace", "Quality of Life") ~
-                                   "Public Peace, Quality of Life",
-                                 TRUE ~ crime_group_large_inferred)) %>%
+  mutate(crime_group = case_when(crime_group_inferred %in% c("Narcotics - Manufacture, Sell", "Narcotics - Possession, Purchase") ~ crime_group_inferred,
+                                 TRUE ~ crime_group_large_inferred) %>%
   mutate(year = as.character(year)) %>%
   group_by(year, location_police_district, crime_group) %>%
   summarise(group_total_incidents = n_distinct(id_case_number),
@@ -2447,9 +1536,9 @@ arrest_dist <- crime %>%
   mutate(total_incidents = sum(group_total_incidents),
          total_arrests = sum(group_total_arrests),
          total_noarrest = sum(group_total_noarrest)) %>%
-  filter(!location_police_district %in% c("021", "031", "0", "000"))
+  filter(!location_police_district %in% c("021", "031", "0", "000")) %>%
 
-arrest_dist <- arrest_dist %>%
+#arrest_dist <- arrest_dist %>%
   group_by(location_police_district, crime_group) %>%
   summarise_if(is.numeric, sum) %>%
   mutate(year = "All Years") %>%
@@ -2473,21 +1562,7 @@ arrest_dist <- arrest_dist %>%
                         labels=c("District 11",
                                         "Other District >= 70% Black/Latino",
                                         "Other District < 70% Black/Latino"))) %>%
-  as.data.frame()
-
-```
-
-<br>
-
-## Crime group share of total arrests
-
-In the 11th District, drug charges have consistently made up a much larger share of overall arrests, and violent crimes a much lower share, in comparison to other districts in the city.
-
-However, the shares of total arrests that were for drug sales (versus possession and purchase) and weapons violations have gone up in the 11th District. The share of arrests that were for property crimes, and drug possession and purchase, has gone down.
-
-```{r compare bubble, fig.width=10, fig.height=5}
-
-arrest_dist %>%
+  as.data.frame() %>%
   filter(year != "All Years") %>%
   mutate(year = as.numeric(year)) %>%
   arrange(desc(color)) %>%
@@ -2501,43 +1576,7 @@ arrest_dist %>%
 
 <br>
 
-```{r export 11th shootings, eval=FALSE, include=FALSE}
-
-# export 11th district shootings in 2018 and 2019
-crime %>%
-  filter(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") &
-           year %in% c("2019", "2018") & 
-           location_police_district == "011") %>%
-  select(shot_cat, status_arrest, date_occurred,
-         location_latitude, location_longitude) %>%
-  unique() %>%
-  write_csv("Output/11th_dist_shootings.csv")
-#553
-  
-```
-
-## Location of shootings and drug arrests 
-
-This map is coded by arrest (blue) and no arrest(red), and only shows incidents from 2018 and 2019.
-
-```{r map 11, fig.width=10, fig.height=10}
-
-qmplot(location_longitude, location_latitude, data = 
-         crime %>%
-         mutate(group = case_when(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") ~ shot_cat,
-                             crime_group_large_inferred == "Narcotics" ~ crime_group_inferred,
-                             TRUE ~ "Other")) %>%
-         filter(year %in% c("2019", "2018") & group != "Other" &
-                  location_police_district == "011")
-       , colour = status_arrest,  size = 4, alpha = 0.9, extent = "panel") + 
-  facet_wrap(~ group, ncol = 2) +
-  theme(legend.position="blank")
-
-```
-
-<br>
-
-#### Location type for shootings {-}
+### Location type for shootings
 
 ```{r location shootings}
 
@@ -2554,6 +1593,67 @@ shot %>%
   formatPercentage(c("Share All"),0)
 
 ```
+
+## Story stats for 2019
+
+Stats for just 2019 for the lede of the story.
+
+**From story:**
+
+>Of the 48 fatal shootings that occurred in the district during the first eight months of this year, only one — the February killing of a 22-year-old man during a robbery — is listed in the police database as “cleared by arrest.” The police didn’t do much better with shootings that leave survivors: Just 7 of 160 nonfatal shootings in the district were cleared by arrest.
+
+```{r more 1}
+
+crime %>% 
+  filter(location_police_district == "011" &
+           year == 2019 &
+    shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) %>%
+  group_by(shot_cat, status) %>%
+  summarise(n = n_distinct(id_case_number))
+
+```
+
+**From story:**
+
+>At the same time, arrests for less serious crimes, such as drug buying or possession, were very common. In fact, during the same eight months, more than a third of the arrests in the district were of people who allegedly bought or possessed drugs.
+
+```{r drugs share 2019}
+
+# crime group and share of all crimes
+crime %>% 
+  filter(location_police_district == "011" &
+           year == 2019 & status_arrest) %>%
+  group_by(crime_group_inferred) %>%
+  summarise(n = n_distinct(id_case_number)) %>%
+  arrange(-n) %>%
+  
+  adorn_one_col()
+
+```
+
+<br>
+
+**Location of shootings and drug arrests** 
+
+This map is coded by arrest (blue) and no arrest (red), and only shows incidents from 2019.
+
+```{r map 11, fig.width=10, fig.height=5}
+
+qmplot(location_longitude, location_latitude, data = 
+         crime %>%
+         mutate(group = case_when(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting") ~ "Shooting",
+                             crime_group_inferred == "Narcotics - Possession, Purchase" ~ "Narcotics - Possession, Purchase",
+                             TRUE ~ "Other")) %>%
+         filter(year == "2019" & group != "Other" &
+                  location_police_district == "011")
+       , colour = status_arrest,  size = 4, alpha = 0.9, extent = "panel") + 
+  facet_wrap(~ group, ncol = 2) +
+  theme(legend.position="blank") +
+  ggtitle("Location of Shootings and Drug Possession, Purchase Arrests, 11th District")
+
+```
+
+
 
 <br>
 
@@ -2636,20 +1736,9 @@ shot %>%
   mutate(`% All Shootings` = `# Shootings`/total_shootings) %>%
   unique() %>%
   filter(`# Shootings` >= 10) %>%
-  select(-total_shootings) %>%
+  select(-`# Shootings`) %>%
   dt_filter() %>%
   formatPercentage('% All Shootings', 0)
-
-# 19752+13309+2931
-
-# shot %>% 
-#   filter(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) %>%
-#   group_by(str_detect(location_description, "School")) %>%
-#   summarise(n=n())
-# FALSE	49135			
-# TRUE	201			
-# NA	1			
-
 
 ```
 
