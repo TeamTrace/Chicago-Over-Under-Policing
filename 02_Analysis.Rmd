@@ -1,5 +1,5 @@
 ---
-title: "Preliminary Analysis of Chicago Police Data"
+title: "Analysis of Chicago Police Data"
 output:
   html_document:
     fig_caption: yes
@@ -29,6 +29,8 @@ knitr::opts_chunk$set(
 
 This notebook examines the Chicago Police Department's low rates of arrest for shootings and other violent crimes, and the "over-policing/under-policing" paradigm that exists in many of the city's predominantly black and Latino neighborhoods.
 
+Some of the findings from this analysis were published in The Trace's story, "Most Shooters Go Free in Chicago’s Most Violent Neighborhoods — While Police Make Non-Stop Drug Arrests" (November 11, 2019). 
+
 <br>
 
 #### Crime data {-}
@@ -52,11 +54,7 @@ We combined information from the following sources with the Chicago PD's online 
     + Victim name, age, gender, and race/ethnicity.
 - All shootings (fatal and nonfatal), Jan. 1, 2010 through Aug. 31, 2019.
     + The only additional information, beyond what's in the online data, is the detailed case status and that the incident was classified as a shooting.
-- Current assignment and assignment history for sworn officers.
-
-**Note on police districts**
-
-The Chicago PD closed the 13th, 21st and 23rd districts in 2012 as part of a [cost-cutting plan](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html). The closed districts are not used in the online data at all, including for the years when they were open, indicating that all incidents are located by their present-day district. To ensure accuracy, we limit our district-level demographic analyses to the years starting in 2013.
+- For sworn officers, current unit assignments and historical unit assignments.
 
 **Manual categorizations**
 
@@ -93,11 +91,21 @@ We estimated the demographics of Chicago's police districts by doing a geospatia
 
 **Police district boundaries** 
 
+**Note on police districts**
+
+The Chicago PD closed the 13th, 21st and 23rd districts in 2012 as part of a [cost-cutting plan](https://www.chicagotribune.com/news/breaking/chi-chicago-police-districts-close-in-costcutting-plan-20120303-story.html). The closed districts are not used in the online data at all, including for the years when they were open, indicating that all incidents are located by their present-day district. To ensure accuracy, we limit the published portions of our district-level demographic analyses to the years starting in 2013.
+
 - Current as of Dec. 19, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-current-/fthy-xz3r)
+- Depreciated December 18, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Districts-deprecated-on-12-18-20/p3h8-xsd4). ([pdf map](https://news.wttw.com/sites/default/files/Map%20of%20Chicago%20Police%20Districts%20and%20Beats.pdf))
+ 
+**Police beats**
+
+- Current as of Dec. 19, 2012, from city's [online data portal](https://data.cityofchicago.org/Public-Safety/Boundaries-Police-Beats-current-/aerh-rz74). 
  
 **Census Tracts**
 
 - 2010 Census Tracts, from city's [online data portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2010/5jrd-6zik).
+- 2000 Census Tracts, from city's [online data portal](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Census-Tracts-2000/pt6c-hxpp).
 
 **Census Bureau Stats**
 
@@ -128,7 +136,7 @@ The following experts reviewed and provided feedback on our methodology and find
 
 # Setup
 
-```{r load data and packages}
+```{r load data and packages, message=TRUE, warning=TRUE, include=FALSE}
 
 rm(list=ls())
 gc()
@@ -138,7 +146,7 @@ source("./Functions/default.R")
 
 ```
 
-```{r load data}
+```{r load data, message=TRUE, warning=TRUE, include=FALSE}
 
 beats <- read_csv("Output/police_beats_tracts_sum.csv", guess_max = 5000) %>%
   filter(location_police_district != "099") %>%
@@ -152,8 +160,7 @@ emp_current <- read_csv("Output/staff_current_foia.csv", guess_max = 200000)
 
 ```
 
-
-```{r crime}
+```{r crime, message=TRUE, warning=TRUE}
 
 crime_org <- read_csv("Output/crime_clean.csv", guess_max = 8000000)
 
@@ -225,7 +232,7 @@ shot <- crime %>% filter(shot_cat != "Other")
 # remove crime_org from global environment 
 rm(crime_org)
 
-crime %>% group_by(location_police_district) %>% summarise(n=n()) %>% dt_bare()
+#crime %>% group_by(location_police_district) %>% summarise(n=n()) %>% dt_bare()
 
 ```
 
@@ -233,11 +240,11 @@ crime %>% group_by(location_police_district) %>% summarise(n=n()) %>% dt_bare()
 
 <br>
 
-# Violent Crime Arrest Rates, Counts, Rates Per 100K
+# Arrest Rates, Counts, Rates Per 100K
 
-The following charts calculate the arrest rate, number of incidents, and rate per 100,000 residents, for UCR murder, rape, robbery, and assault/battery, along with what Chicago PD has classified as "shootings." We use the online "arrest" status here since this is the variable we have for all incidents. 
+The following charts calculate the arrest rate, number of incidents, and rate per 100,000 residents, for UCR murder, rape, robbery, and assault/battery, along with what Chicago PD has classified as "shootings." We use the online "arrest" status here since this is the variable that we have for all incidents. 
 
-The X intercepts are 2010 (the year we have all shootings classified as such, per Chicago PD FOIL data) and 2012 (year of consolidation)
+The x-intercepts are 2010 (the year we have all shootings classified as such, per Chicago PD FOIL data) and 2012 (year of consolidation)
 
 ```{r summary charts}
 
@@ -334,7 +341,7 @@ chart_plot <- function(table) {
 
 ```
 
-## All Part I Violent
+# All Part I Violent Crime
 
 ```{r all ucr, echo=FALSE, fig.height=3, fig.width=10}
 
@@ -364,7 +371,7 @@ crime_stats %>%
 ## Shootings and UCR Gun Crimes
 
 - Caveats:
-    + "Nonfatal shootings" does not include rapes and robberies from prior to 2010 that were nonfatal shootings, which is probably around 7% of all nonfatal shootings, based on the share from 2010 onward. (Only a handful of those were rapes, the rest were  robberies). The dashed line is 2010.
+    + "Nonfatal shootings" does not include rapes and robberies from prior to 2010 that were nonfatal shootings, which is around 7% of all nonfatal shootings, based on the share of nonfatal shootings from 2010 onward. (Only a handful of those were rapes, the rest were robberies). The dashed line is 2010.
     + "All Shootings" includes fatal shootings, nonfatal shootings (victim was shot), and firearm discharges. Firearm discharge is more accurate prior to 2010 because there are specific IUCR codes that indicate firearm discharge.
     + "UCR Gun" includes murders, rapes, robberies and assaults where firearm was indicated. It does not include *not* firearm discharges, which are UCR 15 weapon violations (reckless or unlawful use of firearm).
 
@@ -393,7 +400,7 @@ crime_stats %>%
 
 <br>
 
-### Tables
+## Tables
 
 **Annual counts of crime categories**
 
@@ -448,6 +455,8 @@ For homicides, the online arrest field is *overly* generous, marking incidents a
 
 For nonfatal shootings, it's the opposite: The online arrest flag does not capture partial or exceptional clearances, which account for another 7% of all shootings since 2010.
 
+<br>
+
 #### Homicides {-}
 
 The online arrest field and the FOIA cleared field match up almost exactly. All cases with arrest marked "False" are marked as not cleared ("N") in the FOIA data. All but 7 of the cases with arrest marked "True" are marked as cleared ("Y") in the FOIA data.
@@ -482,7 +491,7 @@ shot %>%
 
 #### Online vs. FOIA status for gun murders {-}
 
-This line chart shows that there's a big difference between the two statuses for all years going back to 2010, not just more recent years, which might suggest the detailed case status isn't as up-to-date.
+This line chart shows that there's a significant difference between the two statuses for all years going back to 2010, not just the more recent years.
 
 ```{r cleared shootings comparison chart}
 
@@ -505,7 +514,11 @@ shot %>%
   
 ```
 
-**Number of homicides open for a year or longer**
+<br>
+
+#### Murders open for 1+ year {-}
+
+53% of all murders more than a year old remain open, 5,208 murders in total.
 
 ```{r hom year}
 
@@ -539,18 +552,12 @@ shot %>%
 
 Detailed case status for shootings by crime classification, from the FOIA data.
 
-**Status Definitions, according to Chicago PD:**
-
-- 0-OPEN ASSIGNED: Assigned to a Detective for Investigation	
-- 0-OPEN UNASSIGNED: Reviewed by District, not yet assigned to Detectives	
-- 1-SUSPENDED: Case cannot proceed further at this time pending additional investigative leads	
-- 3-CLEARED CLOSED: All offenders have been arrested and charged	
-- 4-CLEARED OPEN: One or more offenders arrested and charged, one or more offenders still wanted	
-- 5-EX CLEARED CLOSED: All offenders identified, whereabouts known, and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender	
-- 6-EX CLEARED OPEN: One or more offenders identified, whereabouts known and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender	
-- 7-CLOSED NON-CRIMINAL: Incident not criminal in nature
+<br>
 
 #### All Years Combined {-}
+
+- 75% of fatal shootings are open (3,058 total)
+- 3% of nonfatal shootings are open (660 total), 83% are "suspended" (16,153 total).
 
 ```{r total case status by crime type}
 
@@ -578,56 +585,9 @@ shot %>%
 
 <br>
 
-#### Case status by year % {-}
-
-```{r detailed case status by year}
-
-table <- shot %>% 
-  filter(!is.na(status) & 
-           crime_primary_type != "Crim Sexual Assault" &
-           !(shot_cat == "Other Homicide" & year >= 2017)) %>%
-  group_by(status, year) %>%
-  summarise(`Fatal Shootings` = n_distinct(id_case_number[shot_cat == "Fatal Shooting"]),
-            `All Nonfatal Shootings` = n_distinct(id_case_number[shot_cat == "Nonfatal Shooting"]),
-            `Battery` = n_distinct(id_case_number[crime_primary_type == "Battery"]),
-            `Robbery` = n_distinct(id_case_number[crime_primary_type == "Robbery"])) %>%
-  gather("Crime Group","total_status", `Fatal Shootings`:`Robbery`) %>%
-  mutate(`Crime Group` = factor(`Crime Group`, levels=c("Fatal Shootings", "All Nonfatal Shootings", 
-                                                        "Battery", "Robbery"), 
-                      labels=c("Fatal Shootings", "All Nonfatal Shootings", 
-                                                        "Battery", "Robbery"))) %>%
-  group_by(year, `Crime Group`) %>%
-  mutate(total = sum(total_status),
-         percent_status = total_status/total)
-
-table %>%
-  select(`Crime Group`, status, year, percent_status) %>%
-  arrange(`Crime Group`, status) %>%
-  spread(year, percent_status) %>%
-  dt_no_filter() %>%
-  formatPercentage(c(3:21), 0)
-
-```
-
-<br>
-
-#### Case status by year # {-}
-
-```{r table dt simple counts}
-
-table %>%
-  select(`Crime Group`, status, year, total_status) %>%
-  arrange(`Crime Group`, status) %>%
-  spread(year, total_status) %>%
-  dt_no_filter()
-
-```
-
-<br>
-
 #### Case status by month for 2019 {-}
 
-This is to see how quickly nonfatal shootings are suspended. Data was generated Sept 25, 2019 (goes to Aug. 31, 2019). Nearly one-third of the nonfatal shootings from August were already suspended.
+This is to see how quickly nonfatal shootings are suspended. Our data with detailed case status goes through Aug. 31, 2019, and was generated Sept 25, 2019. Nearly one-third of the nonfatal shootings from August were already suspended.
 
 ```{r status detail month}
 
@@ -636,15 +596,7 @@ shot %>%
   group_by(status, month = month(date_occurred)) %>%
   summarise(n=n()) %>%
   spread(month, n) %>%
-  adorn_pct_down()
-
-shot %>% 
-  filter(shot_cat == "Nonfatal Shooting" & year == 2019 &
-           month(date_occurred) == 8) %>%
-  group_by(status, day = day(date_occurred)) %>%
-  summarise(n=n()) %>%
-  spread(day, n) %>%
-  adorn_pct_down()
+  dt_bare()
 
 ```
 
@@ -654,9 +606,9 @@ shot %>%
 
 ## Arrest by watch, detective area
 
-This is to see whether there has been a big drop in shootings by shift and detective area. 
+To save money, in 2012, the Chicago PD consolidated its detective jurisdictions from five to three — Areas North, Central and South. Area South, where nearly 9 out of 10 residents are black or Latino, is the only area without any designated homicide detectives on the midnight shift, when most shootings occur, according to a [report on CPD's homicide investigations](https://home.chicagopolice.org/homicideclearancereport2019/) by the Police Executive Research Forum. 
 
-- x intercept is 2012, year of consolidation
+This section looks at arrest rates for shootings by shift and detective area. The x-intercept is 2012, the year of consolidation.
 
 ```{r time area}
 
@@ -694,10 +646,10 @@ shot %>%
 
 #### Fatal shootings only {-}
 
-Consolidating watch overlap into start of watch. Fatal shootings only, since those are the homicides that have seen a big decline in clearances/ arrests.
+For simplicity, these charts don't break out the periods when two watches shifts overlap.
 
-- All watch shifts and areas have seen a significant decline in arrest rate. It's interesting that the trend in decline is so even between the areas. 
-- 1st Watch in South Area has the lowest rate of arrest in 2018 (8% of fatal shootings).
+- All watch shifts and areas have seen a significant decline in arrest rate. It's interesting that the trend in decline is so similar between the three areas. 
+- 1st Watch in South Area had the lowest rate of arrest in 2018 (8% of fatal shootings).
 - 1st Watch has the most fatal shootings, and the biggest drop in the total number of arrests. This could be putting a bigger drag on the city's overall arrest rate.
 
 **From story:**
@@ -740,7 +692,7 @@ shot %>%
 
 ```{r watch area nfs, fig.width=10, fig.height=8}
 
-shot %>%
+ shot %>%
   mutate(detective_watch = case_when(detective_watch == "1st and 3rd Watch overlap" ~ "1st Watch",
                            detective_watch == "2nd and 3rd Watch overlap" ~ "3rd Watch",
                            detective_watch == "1st and 2nd Watch overlap" ~ "2nd Watch",
@@ -1774,21 +1726,10 @@ qmplot(location_longitude, location_latitude, data =
 shot %>%
   filter( 
     (location_police_district == "005" & year == 2017) |
-      (location_police_district == "022" & year == 2015)
-    ) %>%
-  
-  group_by(location_police_district, status) %>%
-  summarise(n=n()) %>%
-  spread(location_police_district, n) %>%
-  adorn_pct_down()
-
-shot %>%
-  filter( 
-    (location_police_district == "005" & year == 2017) |
       (location_police_district == "022" & year == 2015)) %>%
-  filter( shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) %>%
+  filter(shot_cat %in% c("Fatal Shooting", "Nonfatal Shooting")) %>%
   group_by(location_police_district, status) %>%
-  summarise(n=n_distinct(id_case_number)) %>%
+  summarise(n = n_distinct(id_case_number)) %>%
   spread(location_police_district, n) %>%
   adorn_pct_down()
 
@@ -1831,6 +1772,9 @@ emp_current %>%
 
 ```
 
+<br>
+
+<br>
 
 # Other Homicide and Shooting Stats
 
@@ -1887,7 +1831,7 @@ shot %>%
 
 <br>
 
-## Location description of shootings
+#### Location description of shootings {-}
 
 73% of shootings happened on city streets, sidewalks and in alleyways (more than 41,000 shootings in total).
 
