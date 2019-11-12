@@ -766,11 +766,9 @@ shot %>%
 
 # Over-Policing, Under-Policing
 
-More than one-third of the arrests made by the Chicago PD from 2001 through Aug 2019 were for narcotics. Meanwhile, police failed to make arrests in a half-million murders, rapes, robberies and serious assaults, and another 1.1 million less serious violent crimes and sex offenses.
+More than one-third of the arrests made by the Chicago PD from 2001 through Aug 2019 were for narcotics charges. Meanwhile, police failed to make arrests in a half-million murders, rapes, robberies and serious assaults, and another 1.1 million less serious violent crimes and sex offenses.
 
 Nearly 100% of all drug and alcohol reports resulted in arrests, indicating that these are largely proactive arrests. That doesn't mean that police aren't responding to general complaints of drug activity in a neighborhood; just that the arrests are largely the result of crimes the officers witness first-hand from proactive activities like patrols, pat-downs, surveillance, or undercover activity, versus an investigation into a specific crime report. 
-
-Meanwhile, only 14% of the reports of violent crimes, property crimes, and threats and harassment resulted in arrest, leaving 4.9 million reports without arrest.
 
 **Caveats**
 
@@ -781,6 +779,8 @@ Meanwhile, only 14% of the reports of violent crimes, property crimes, and threa
 <br>
 
 ## Arrest, no arrest counts
+
+Drug possession and purchase charges were the most frequent cause of arrest, nearly 610,000 arrests since 2001. Robbery is the Part I violent crime with the most reports that haven't led to an arrest --- 237,000, or 90 percent of all robbery reports.
 
 ```{r arrests large, echo=FALSE}
 
@@ -799,18 +799,6 @@ arrest_report <- function(table) {
 }
 
 crime %>%
-  mutate(all_arrests = n_distinct(id[status_arrest])) %>%
-  group_by(crime_group = crime_group_large_inferred, all_arrests) %>% 
-  arrest_report()
-
-```
-
-<br>
-
-#### Counts by detailed crime type: {-}
-
-```{r arrests detail, echo=FALSE}
-crime %>%
   mutate(all_arrests = n_distinct(id[status_arrest]),
          crime_group = paste(crime_group_large_inferred, crime_group_inferred, sep = " - ")) %>%
   group_by(crime_group, all_arrests) %>% 
@@ -822,7 +810,7 @@ crime %>%
 
 #### Count by drug charge: {-}
 
-Charges categorized as possession and purchase of marijuana comprise 42% of all narcotics-related arrests from 2001 through Aug. 2019. The second most common category was possession and purchase of hard drugs like crack and heroin.
+The most common narcotics-related charges from Jan. 2001 through Aug. 2019 were possession of 30 grams or less of marijuana --- 276,000 arrests, or 38 percent of all narcotics-related arrests --- followed by crack possession, then heroin possession.
 
 ```{r drug arrest detail, echo=FALSE}
 
@@ -835,7 +823,9 @@ crime %>% filter(crime_primary_type == "Narcotics") %>%
 
 <br>
 
-#### Story stat checks {-}
+#### Story stat check {-}
+
+From story:
 
 >Chicago Police have failed to make an arrest in 85 percent of the violent crimes committed with firearms that have taken place in the city since 2001: Nearly 42,000 shootings that resulted in an injury or fatality, and another 134,000 rapes, robberies, and assaults at gunpoint. 
 
@@ -863,6 +853,10 @@ crime %>%
 ## Arrest, no arrest by year
 
 These charts show the change in the breakdown of crime reports with and without arrests over time.
+
+The top set of charts are crime reports with arrest, the bottom set, crime reports without arrests. 
+
+The share of arrests that were for drug possession and purchase was highest in 2010, at 38 percent, but has fallen to around 18 percent of all arrests this year. During the same time period, CPD has increased the share of arrests that are for weapon violations, from 3 percent to 10 percent.
 
 ```{r bucket by year citywide, fig.width=10, fig.height=7}
 
