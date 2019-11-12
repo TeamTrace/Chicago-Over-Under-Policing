@@ -87,7 +87,7 @@ We compared the incident and victim counts in the online data, our FOIA data, an
 
 #### Police district demographic data {-}
 
-We estimated the demographics of Chicago's police districts by doing a geospatial join of the police district and census tract shapes.
+We estimated the demographics of Chicago's police districts by doing a spatial join of the police district and census tract shapes.
 
 **Police district boundaries** 
 
@@ -443,7 +443,7 @@ This section calculates violent crime counts, rates, and arrest rates, Jan. 01, 
     + 5-EX CLEARED CLOSED: All offenders identified, whereabouts known, and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender.
     + 6-EX CLEARED OPEN: One or more offenders identified, whereabouts known and either complainant refused to prosecute or unusual circumstances preclude charging including death of the offender.
     + 7-CLOSED NON-CRIMINAL: Incident not criminal in nature.
-- **Counts:** All counts, besides victim demographics, are by unique incident id. We count them this way because this is how cases are investigated (i.e. a homicide with two victims will not be assigned to two separate detectives), and for consistency, because we don’t have victim-level records for crimes other than homicides. Three of the 9,411 homicide incidents, each with two victms, has a different arrest status for each victim. Those incidents would be counted under both "arrest" and "no arrest".
+- **Counts:** All counts, besides victim demographics, are by unique incident id. We count them this way because this is how cases are investigated (i.e. a homicide with two victims will not be assigned to two separate detectives), and for consistency, because we don’t have victim-level records for crimes other than homicides. Three of the 9,411 homicide incidents, each with two victims, has a different arrest status for each victim. Those incidents would be counted under both "arrest" and "no arrest".
 
 <br>
 
@@ -899,6 +899,10 @@ crime %>%
 
 These charts show the share of crime reports with an arrest and crime reports without an arrest, broken down by crime group and the share of the police district's residents who were black or Latino. The time period covered is Jan. 1, 2013 through Aug. 31, 2019.
 
+The share of all arrests that were for drug possession and purchase gets progressively higher as the district becomes more black and Latino.
+
+The share of all crime reports without arrest that are for violent crimes also increases as the district becomes more black and Latino.
+
 Note: If a police district was 10% black and Latino from 2013-2015, and 30% black and Latino the remaining years, the arrests in that district would be counted in the 0-20% group for 2013-2015; and in the 20-40% group for the remaining years.
 
 ```{r group buckets}
@@ -939,7 +943,11 @@ crime %>%
 
 ```
 
-```{r by year district}
+#### Arrest, no arrest by year {-}
+
+While the share of all arrests that are for drug possession and purchase has gone down in all districts, there's still a significant disparity based on the demographics of the district.
+
+```{r by year district, fig.width=10, fig.height=12}
 
 arrest_bucket_year <- crime %>%
   filter(year >= 2013) %>%
@@ -971,46 +979,19 @@ arrest_bucket_year <- crime %>%
          `% No Arrest` = `Group No Arrest`/`Total No Arrest`,
          `% Total` = `Group Total`/`Total`)
 
-```
-
-<br>
-
-#### Arrest by year {-}
-
-**Drug possession and purchase arrests**
-
-The larger the share of a police district's residents who were black or Latino, the larger the share of arrests that were for drug possession and purchase. 
-
-```{r arrest bucket year facet, fig.height=6, fig.width=10}
 arrest_bucket_year %>%
-  ggplot(aes(x = `District % Black or Latino`, y = `% Arrests`, fill = crime_group)) +
+  gather("measure", "value", `Group Arrest`:`% Total`) %>%
+  filter(measure %in% c("% Arrests", "% No Arrest" )) %>%
+  ggplot(aes(x = `District % Black or Latino`, y = value, fill = crime_group)) +
   geom_bar(stat="identity") +
-  facet_wrap(~ Year, ncol = 4) +
-  geom_text(aes(y = `% Arrests`, label = round(((`% Arrests`)*100), 0)), 
+  facet_grid(cols = vars(measure), rows = vars(Year)) +
+  geom_text(aes(y = value, label = round(((value)*100), 0)), 
     size = 3.5, position=position_stack(0.5)) + 
   labs(x="% Police District Black and Latino", y = "% of All Arrests") +
   theme(panel.border=element_blank(), axis.line=element_line()) +
   theme(legend.position="top", legend.title=element_blank()) +
   ggtitle("Crime Reports With Arrest, by Year and District % Black, Latino")
-```
 
-<br>
-
-#### No arrest by year {-}
-
-Meanwhile, in the 80-100% districts, violent crimes make up a far greater share of crime reports that did not lead to arrest. This is despite the fact that the districts in the 80-100% group have much higher numbers and rates of violent crimes, which would presumably lead to a larger share of the arrests in those districts being for violent crimes.
-
-```{r no arrest bucket year facet, fig.height=6, fig.width=10}
-arrest_bucket_year %>%
-  ggplot(aes(x = `District % Black or Latino`, y = `% No Arrest`, fill = crime_group)) +
-  geom_bar(stat="identity") +
-  facet_wrap(~ Year, ncol = 4) +
-  geom_text(aes(y = `% No Arrest`, label = round(((`% No Arrest`)*100), 0)), 
-    size = 3.5, position=position_stack(0.5)) + 
-  labs(x="% Police District Black and Latino", y = "% of All Arrests") +
-  theme(panel.border=element_blank(), axis.line=element_line()) +
-  theme(legend.position="top", legend.title=element_blank()) +
-  ggtitle("Crime Reports Without Arrest, by Year and District % Black, Latino")
 ```
 
 <br>
@@ -1054,7 +1035,9 @@ districts %>%
 
 **From story:**
 
-The more black and Latino the district, the higher the share of all arrests for offenses related to narcotics, prostitution, underage drinking, and gambling, which all tend to result from “proactive policing” rather than responding to a crime report.
+In August 2015, the Chicago Police agreed to allow an outside monitor to oversee reforms as part of a settlement agreement with the American Civil Liberties Union over allegations that police were targeting people for street stops based on skin color. A few months later, the DOJ initiated its own investigation of the agency. The CPD has since promised to make sweeping changes to the way it polices black and Latino communities. 
+
+But we found that an over-policing/under-policing dynamic still exists in many of those communities.
 
 ```{r op_up_table pct}
 
@@ -1090,7 +1073,7 @@ op_up_doj <- crime %>%
 
 op_up_doj <- op_up_doj %>%
   as.data.frame() %>%
-  mutate(year = ifelse(year %in% c("2013", "2014", "2015"), "2013-2015",
+ mutate(year = ifelse(year %in% c("2013", "2014", "2015"), "2013-2015",
                        "2016-2018")) %>%
   group_by(year, location_police_district) %>%
   summarise_if(is.numeric, sum) %>%
@@ -1153,7 +1136,17 @@ doj_xy <- op_up_doj %>%
        gather("x_measure", "x_value", `District % Black, Latino`:`District % White`) %>%
   left_join(doj_xy, by = c("location_police_district", "year")) %>%
   rename(Years = year)
-  
+
+```
+
+<br>
+
+These charts map police districts based on the share of the residents who were black or Latino as the x axis, by the share of all arrests that were for drug possession and purchase (y axis, top row), and the share of shootings that led to an arrest (y axis, bottom row).
+
+The red dots are for 2013 - 2015, the blue dots are for 2016 - 2018.
+
+```{r dij xy scatter, fig.width=10, fig.height=9}
+
 doj_xy %>% 
   ggplot(aes(x = x_value, y = y_value, color=Years), 
          colour="black", shape=21, size = 1, alpha=.8, label=location_police_district) +
@@ -1172,7 +1165,7 @@ doj_xy %>%
 
 #### Linear models {-}
 
-**In the three years following the DOJ report, the district's share of residents who are black or Latino decreases in significance on the share of all arrests that are for drug purchase and possession, but it's still significant.**
+For the share of arrests that are for drug possession and purchase, the district's share of residents who are black or Latino decreases in significance in the 2016-2018 time period.
 
 ```{r lm data}
 
@@ -1203,21 +1196,23 @@ summary(lm(drug_poss_buy_share_allarrest ~ dist_percent_blk_hisp,
 
 <br>
 
-**In the three years following the DOJ report, the district's share of residents who are black or Latino increases in significance on the share of shootings that led to arrest.**
+For the share of shootings that have led to arrest, the district's share of residents who are black or Latino increases in significance in the 2016-2018 time period.
 
 ```{r lm2}
 
 summary(lm(shootings_arrest_rate ~ dist_percent_blk_hisp,
             data = (doj_lm %>%
-                      filter(year == "2013-2015"))))
+                      filter(year == "2013-2015" & shootings_total >= 20))))
 
 summary(lm(shootings_arrest_rate ~ dist_percent_blk_hisp,
             data = (doj_lm %>%
-                      filter(year == "2016-2018"))))
+                      filter(year == "2016-2018" & shootings_total >= 20))))
 
 ```
 
 ### Most frequent cause of arrest
+
+From the story:
 
 >Even as the city has dramatically scaled back its enforcement of laws against drug possession and use, these charges remain the most frequent cause for arrest in a handful of West Side districts that are predominantly black and Latino.
 
@@ -1273,19 +1268,9 @@ crime %>%
 
 **Offenses classified as proactive**
 
-```{r proactive}
+Offenses are classified as proactive if 90 percent or more of the reports have resulted in arrest.
 
-crime %>%
-  group_by(crime_primary_type, status_arrest) %>%
-  summarise(n = n_distinct(id_case_number)) %>%
-  spread(status_arrest, n) %>%
-  mutate(share_arrest = `TRUE`/(`TRUE`+`FALSE`),
-         proactive = ifelse(share_arrest >= .9, TRUE, FALSE)) %>%
-  filter(proactive) %>%
-  arrange(-`TRUE`) %>%
-  dt_simple_long() %>%
-  formatPercentage(c("Share Arrest"),0)
-  # Narcotics, prostitution, interfering with a police officer, ganbling, liquor law violations
+```{r proactive}
 
 proactive <- crime %>%
   group_by(crime_description, crime_primary_type, status_arrest) %>%
@@ -1312,13 +1297,13 @@ table <- crime %>%
   group_by(year, location_police_district) %>%
   mutate(rank = round((rank(-n)),0),
          total = sum(n),
-         share_total = round((n/total),2)) %>%
+         `% of All Arrests` = round((n/total),2)) %>%
   as.data.frame() %>%
   mutate(year = as.character(year)) %>%
 
   left_join((
     districts %>%
-      select(location_police_district, year, dist_percent_blk_hisp) %>%
+      select(location_police_district, year, `District % Black and Latino` = dist_percent_blk_hisp) %>%
       mutate(year = as.character(year)) %>%
       as.data.frame()
   ), by = c("location_police_district", "year")
@@ -1326,7 +1311,7 @@ table <- crime %>%
   filter(proactive)
 
 table %>%  
-  ggplot(aes(x = dist_percent_blk_hisp, y = share_total), 
+  ggplot(aes(x = `District % Black and Latino`, y = `% of All Arrests`), 
          colour="black", shape=21, size = 1, alpha=.8) +
   facet_grid(cols=vars(year), 
              labeller = label_wrap_gen(width = 25, multi_line = TRUE)) +
@@ -1334,10 +1319,7 @@ table %>%
   geom_smooth(size=.5, linetype = "dashed", method = lm) +
   theme_bw() +
   theme(legend.position="top") +
-  ggtitle("District Demographics, % All Arrests Proactive",
-          "An offense is labled 'proactive' if at least 90% of the reports have an arrest. 
-          The top offenses, in order of number of arrests, are: Narcotics, prostitution,
-          interfering with a police officer, ganbling, liquor law violations")
+  ggtitle("District Demographics, % All Arrests Proactive Policing")
 
 ```
 
@@ -1356,7 +1338,7 @@ crime %>%
   group_by(year, location_police_district) %>%
   mutate(rank = round((rank(-n)),0),
          total = sum(n),
-         share_total = round((n/total),2)) %>%
+         `% of All Arrests` = round((n/total),2)) %>%
   as.data.frame() %>%
   mutate(year = as.character(year)) %>%
 
@@ -1368,9 +1350,10 @@ left_join(
        mutate(year = ifelse(year == "2014", 
                             "2013-2015", "2016-2018"))) 
      , by = c("year", "location_police_district")) %>%
+  rename(`District % Black and Latino` = dist_percent_blk_hisp) %>%
 
   filter(proactive) %>%  
-  ggplot(aes(x = dist_percent_blk_hisp, y = share_total), 
+  ggplot(aes(x = `District % Black and Latino`, y = `% of All Arrests`), 
          colour="black", shape=21, size = 1, alpha=.8) +
   facet_grid(cols=vars(year), 
              labeller = label_wrap_gen(width = 25, multi_line = TRUE)) +
@@ -1378,23 +1361,26 @@ left_join(
   geom_smooth(size=.5, linetype = "dashed", method = lm) +
   theme_bw() +
   theme(legend.position="top") +
-  ggtitle("District Demographics, % All Arrests Proactive",
-          "An offense is labled 'proactive' if at least 90% of the reports have an arrest. 
-          The top offenses, in order of number of arrests, are: Narcotics, prostitution,
-          interfering with a police officer, ganbling, liquor law violations")
+  ggtitle("District Demographics, % All Arrests Proactive Policing")
 ```
+
+The relationship between proactive arrests and the district's share of residents who are black and Latino is very strong, and only weakens slightly during the three years following 2015.
 
 ```{r proactive regression}
 
-# regression is extremely signficant
-summary(lm(share_total ~ dist_percent_blk_hisp,
-            data = table))
+summary(lm(`% of All Arrests` ~ `District % Black and Latino`,
+            data = (table %>%
+                      filter(year >= 2013 & year <= 2015))))
+
+summary(lm(`% of All Arrests` ~ `District % Black and Latino`,
+            data = (table %>%
+                      filter(year >= 2016 & year <= 2018))))
 
 ```
 
 ### Part I crimes, district demographics
 
->In the police districts that are mostly white, 40 percent of all arrests were for what the federal government deems the most “serious” violent and property offenses. In police districts that are mostly black and Latino, only 17 percent of all arrests were for violent and property offenses.
+In the police districts that are mostly white, 40 percent of all arrests were for what the federal government deems the most “serious” violent and property offenses. In police districts that are mostly black and Latino, only 17 percent of all arrests were for violent and property offenses.
 
 ```{r property other}
 
@@ -1449,7 +1435,9 @@ crime %>%
   mutate(total = sum(n),
          share_total = round((n/total),2)) %>%
   as.data.frame() %>%
-  filter(type == "Part I")
+  filter(type == "Part I") %>%
+  dt_bare() %>%
+  formatPercentage(c("Share Total"),0)
 
 ```
 
@@ -1710,7 +1698,7 @@ qmplot(location_longitude, location_latitude, data =
 
 ### 5th and 22nd Districts
 
-- Antwan McCray shot in disrtict 22 on 8/21/15
+- Antwan McCray shot in district 22 on 8/21/15
 - Melvin Howard, Jr. shot in district 5 in 6/28/17 
 
 >Antwan McCray’s death is among 84 open shootings that happened in the 22nd District in 2015. Howard’s death is among 152 open shootings that happened in the 5th District in 2017. In the years since, police have made hundreds of drug arrests in each district, which are both on the South Side. 
@@ -1780,13 +1768,13 @@ Out of 48987 fatal and nonfatal shootings:
 
 - 81% happened outside.
 - 28% happened outside during daylight hours, 53% during evening hours.
-- 73% took place on streets, sidewalks and in allyways (nearly 40,000 shootings in total).
+- 73% took place on streets, sidewalks and in alleyways (nearly 40,000 shootings in total).
 - 201 specified "school" in the location description.
 
 Notes:
 
 - "Shootings" includes all fatal and nonfatal shootings. However, nonfatal shootings prior to 2010 that were robberies would not be included.
-- The "location_in_out" and "location_group" fields are my manual categorizations of the Chicago PD's location descriptions. The number of incidents classified as "Outside" is likely an *undercount* because some location descriptions were unclear to me.
+- The "location_in_out" and "location_group" fields are my manual categorizations of the Chicago PD's location descriptions. The number of incidents classified as "Outside" is likely an *under-count* because some location descriptions were unclear to me.
 
 ```{r inside outside of shootings, fig.width=10, fig.height=4}
 shot %>% 
